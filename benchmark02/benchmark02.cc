@@ -119,9 +119,9 @@ template <typename T> void run_test(const unsigned int size)
             thrust::plus<T>());
     }
 
-    // CUDA kernels
-    double time_cuda = std::numeric_limits<double>::max();
-    std::vector<T> result_cuda(1);
+    // CUDA kernels 1
+    double time_cuda1 = std::numeric_limits<double>::max();
+    std::vector<T> result_cuda1(1);
     {
         const int threads = 1024;
         const int blocks  = ((size / 8 + threads - 1) / threads);
@@ -141,12 +141,47 @@ template <typename T> void run_test(const unsigned int size)
         for (unsigned int t = 0; t < n_tests; ++t)
         {
             time.start();
-            add_vector<<<blocks, threads>>>(cuda_vector1, cuda_vector2, size);
+            add_vector<T, false><<<blocks, threads>>>(cuda_vector1, cuda_vector2, size);
             cudaDeviceSynchronize();
             time.stop();
-            time_cuda = std::min(time_cuda, time.elapsedSeconds());
+            time_cuda1 = std::min(time_cuda1, time.elapsedSeconds());
         }
-        result_cuda[0] = thrust::transform_reduce(
+        result_cuda1[0] = thrust::transform_reduce(
+            thrust::device, cuda_vector1, cuda_vector1 + size,
+            [] __device__(const T &x) { return x * x; }, (T)0.0,
+            thrust::plus<T>());
+        cudaFree(cuda_vector1);
+        cudaFree(cuda_vector2);
+    }
+
+    // CUDA kernels 2
+    double time_cuda2 = std::numeric_limits<double>::max();
+    std::vector<T> result_cuda2(1);
+    {
+        const int threads = 1024;
+        const int blocks  = ((size / 8 + threads - 1) / threads);
+        std::vector<T> host_vector1(size), host_vector2(size);
+        for (unsigned int i = 0; i < size; ++i)
+        {
+            host_vector1[i] = i % 13 + (0.2 + 0.00001 * (i % 100191));
+            host_vector2[i] = i % 8 + (0.4 + 0.00003 * (i % 100721));
+        }
+        T *cuda_vector1, *cuda_vector2;
+        cudaMalloc(&cuda_vector1, size * sizeof(T));
+        cudaMalloc(&cuda_vector2, size * sizeof(T));
+        cudaMemcpy(cuda_vector1, &host_vector1[0], size * sizeof(T),
+                   cudaMemcpyHostToDevice);
+        cudaMemcpy(cuda_vector2, &host_vector2[0], size * sizeof(T),
+                   cudaMemcpyHostToDevice);
+        for (unsigned int t = 0; t < n_tests; ++t)
+        {
+            time.start();
+            add_vector<T, true><<<blocks, threads>>>(cuda_vector1, cuda_vector2, size);
+            cudaDeviceSynchronize();
+            time.stop();
+            time_cuda2 = std::min(time_cuda2, time.elapsedSeconds());
+        }
+        result_cuda2[0] = thrust::transform_reduce(
             thrust::device, cuda_vector1, cuda_vector1 + size,
             [] __device__(const T &x) { return x * x; }, (T)0.0,
             thrust::plus<T>());
@@ -156,16 +191,18 @@ template <typename T> void run_test(const unsigned int size)
 
     // Display results
     std::cout << std::setprecision(10);
-    std::cout << "Size " << size << "           Kokkos      Thrust      Cuda"
+    std::cout << "Size " << size << "           Kokkos      Thrust      Cuda 1      Cuda 2"
               << std::endl;
     std::cout << "Size " << size << " norm: " << std::sqrt(result_kokkos[0])
               << " " << std::sqrt(result_thrust[0]) << " "
-              << std::sqrt(result_cuda[0]) << std::endl;
+              << " " << std::sqrt(result_cuda1[0]) << " "
+              << std::sqrt(result_cuda2[0]) << std::endl;
 
     std::cout << "Size " << size
               << " GB/s: " << sizeof(T) * 3e-9 * size / time_kokkos << " "
               << sizeof(T) * 3e-9 * size / time_thrust << " "
-              << sizeof(T) * 3e-9 * size / time_cuda << std::endl;
+              << sizeof(T) * 3e-9 * size / time_cuda1 << " "
+              << sizeof(T) * 3e-9 * size / time_cuda2 << std::endl;
 }
 
 int main(int argc, char **argv)

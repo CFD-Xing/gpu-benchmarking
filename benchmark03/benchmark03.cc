@@ -98,7 +98,7 @@ __global__ void compute_matvec(const unsigned int N, const unsigned int M,
     }
 }
 
-template <typename T, bool vl = true>
+template <typename T, bool vl = false>
 __global__ void compute_matvec2(const unsigned int N, const unsigned int M,
                                 const T *A, const T *x, T *y)
 {

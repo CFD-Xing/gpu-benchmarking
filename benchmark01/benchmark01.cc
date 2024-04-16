@@ -13,7 +13,7 @@
 #include "../utils/timer.h"
 #include "../utils/cuda_vectors.h"
 
-template <typename T, bool vl = true>
+template <typename T, bool vl = false>
 __global__ void l2norm_vl(T *__restrict__ sums, T *__restrict__ data,
                           unsigned int n)
 {
@@ -77,7 +77,7 @@ __global__ void l2norm_vl(T *__restrict__ sums, T *__restrict__ data,
     }
 }
 
-template <typename T, bool vl = true>
+template <typename T, bool vl = false>
 __global__ void reduce_vl(T *__restrict__ sums, T *__restrict__ data,
                           unsigned int n)
 {
@@ -185,9 +185,9 @@ template <typename T> void run_test(const unsigned int size)
         }
     }
 
-    // CUDA kernels
-    double time_cuda = std::numeric_limits<double>::max();
-    std::vector<T> result_cuda(1);
+    // CUDA kernels 1
+    double time_cuda1 = std::numeric_limits<double>::max();
+    std::vector<T> result_cuda1(1);
     {
         constexpr int threads = 256;
         constexpr int blocks  = 256;
@@ -203,12 +203,41 @@ template <typename T> void run_test(const unsigned int size)
             cudaMalloc(&result, sizeof(T));
             cudaMemset(sums, 0, blocks * sizeof(T));
             cudaMemset(result, 0, sizeof(T));
-            l2norm_vl<<<blocks, threads>>>(sums, ddata.data().get(), size);
-            reduce_vl<<<1, blocks>>>(result, sums, blocks);
-            cudaMemcpy(result_cuda.data(), result, sizeof(T),
+            l2norm_vl<T, false><<<blocks, threads>>>(sums, ddata.data().get(), size);
+            reduce_vl<T, false><<<1, blocks>>>(result, sums, blocks);
+            cudaMemcpy(result_cuda1.data(), result, sizeof(T),
                        cudaMemcpyDeviceToHost);
             time.stop();
-            time_cuda = std::min(time_cuda, time.elapsedSeconds());
+            time_cuda1 = std::min(time_cuda1, time.elapsedSeconds());
+            cudaFree(sums);
+            cudaFree(result);
+        }
+    }
+
+    // CUDA kernels 2
+    double time_cuda2 = std::numeric_limits<double>::max();
+    std::vector<T> result_cuda2(1);
+    {
+        constexpr int threads = 256;
+        constexpr int blocks  = 256;
+        thrust::device_vector<T> ddata(size);
+        thrust::tabulate(ddata.begin(), ddata.end(),
+                         [] __device__(unsigned int i)
+                         { return i % 13 + (0.2 + 0.00001 * (i % 100191)); });
+        for (unsigned int t = 0; t < n_tests; ++t)
+        {
+            time.start();
+            T *sums, *result;
+            cudaMalloc(&sums, blocks * sizeof(T));
+            cudaMalloc(&result, sizeof(T));
+            cudaMemset(sums, 0, blocks * sizeof(T));
+            cudaMemset(result, 0, sizeof(T));
+            l2norm_vl<T, true><<<blocks, threads>>>(sums, ddata.data().get(), size);
+            reduce_vl<T, true><<<1, blocks>>>(result, sums, blocks);
+            cudaMemcpy(result_cuda2.data(), result, sizeof(T),
+                       cudaMemcpyDeviceToHost);
+            time.stop();
+            time_cuda2 = std::min(time_cuda2, time.elapsedSeconds());
             cudaFree(sums);
             cudaFree(result);
         }
@@ -216,16 +245,18 @@ template <typename T> void run_test(const unsigned int size)
 
     // Display results
     std::cout << std::setprecision(10);
-    std::cout << "Size " << size << "           Kokkos      Thrust      Cuda"
+    std::cout << "Size " << size << "           Kokkos      Thrust      Cuda 1      Cuda 2"
               << std::endl;
     std::cout << "Size " << size << " norm: " << std::sqrt(result_kokkos[0])
               << " " << std::sqrt(result_thrust[0]) << " "
-              << std::sqrt(result_cuda[0]) << std::endl;
+              << " " << std::sqrt(result_cuda1[0]) << " "
+              << std::sqrt(result_cuda2[0]) << std::endl;
 
     std::cout << "Size " << size
               << " GB/s: " << sizeof(T) * 1e-9 * size / time_kokkos << " "
               << sizeof(T) * 1e-9 * size / time_thrust << " "
-              << sizeof(T) * 1e-9 * size / time_cuda << std::endl;
+              << sizeof(T) * 1e-9 * size / time_cuda1 << " "
+              << sizeof(T) * 1e-9 * size / time_cuda2 << std::endl;
 }
 
 int main(int argc, char **argv)
