@@ -114,6 +114,7 @@ template <typename T> void run_test(const unsigned int size)
     const unsigned int n_tests = 40;
 
     // Kokkos results
+    typedef Kokkos::TeamPolicy<>::member_type team_handle;
     double time_kokkos = std::numeric_limits<double>::max();
     std::vector<T> result_kokkos(1);
     {
@@ -121,17 +122,17 @@ template <typename T> void run_test(const unsigned int size)
         Kokkos::View<T *> d_x("d_x", N);
         Kokkos::View<T *> d_y("d_y", M);
         Kokkos::parallel_for(
-            N, KOKKOS_LAMBDA(unsigned int j) {
-                d_x[j] = j;
-                for (unsigned int i = 0; i < M; i++)
-                {
-                    d_A[i * N + j] = sin((T)(i * N + j + 1));
-                }
+            Kokkos::TeamPolicy<>(N, Kokkos::AUTO),
+            KOKKOS_LAMBDA(const team_handle &team) {
+                unsigned int j = team.league_rank();
+                d_x[j]         = j;
+                Kokkos::parallel_for(
+                    Kokkos::TeamThreadRange(team, M), [&](unsigned int i)
+                    { d_A[i * N + j] = sin((T)(i * N + j + 1)); });
             });
         for (unsigned int t = 0; t < n_tests; ++t)
         {
             time.start();
-            typedef Kokkos::TeamPolicy<>::member_type team_handle;
             Kokkos::parallel_for(
                 Kokkos::TeamPolicy<>(M, Kokkos::AUTO),
                 KOKKOS_LAMBDA(const team_handle &team) {
@@ -180,11 +181,11 @@ template <typename T> void run_test(const unsigned int size)
             time.start();
             if constexpr (std::is_same_v<T, float>)
             {
-               cublasSgemv('T', M, N, 1.0f, d_A, M, d_x, 1, 0.0f, d_y, 1);
+                cublasSgemv('T', M, N, 1.0f, d_A, M, d_x, 1, 0.0f, d_y, 1);
             }
             else if constexpr (std::is_same_v<T, double>)
             {
-               cublasDgemv('T', M, N, 1.0, d_A, M, d_x, 1, 0.0, d_y, 1);
+                cublasDgemv('T', M, N, 1.0, d_A, M, d_x, 1, 0.0, d_y, 1);
             }
             cudaDeviceSynchronize();
             time.stop();
@@ -224,11 +225,11 @@ template <typename T> void run_test(const unsigned int size)
             time.start();
             if constexpr (std::is_same_v<T, float>)
             {
-               cublasSgemv('N', M, N, 1.0f, d_A, M, d_x, 1, 0.0f, d_y, 1);
+                cublasSgemv('N', M, N, 1.0f, d_A, M, d_x, 1, 0.0f, d_y, 1);
             }
             else if constexpr (std::is_same_v<T, double>)
             {
-               cublasDgemv('N', M, N, 1.0, d_A, M, d_x, 1, 0.0, d_y, 1);
+                cublasDgemv('N', M, N, 1.0, d_A, M, d_x, 1, 0.0, d_y, 1);
             }
             cudaDeviceSynchronize();
             time.stop();
