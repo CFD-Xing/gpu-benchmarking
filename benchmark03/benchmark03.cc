@@ -84,24 +84,6 @@ template <typename T, bool vl = false>
 __global__ void compute_matvec(const unsigned int N, const unsigned int M,
                                const T *A, const T *x, T *y)
 {
-    unsigned int tid    = blockDim.x * blockIdx.x + threadIdx.x;
-    unsigned int stride = blockDim.x * gridDim.x;
-
-    for (unsigned int i = tid; i < M; i += stride)
-    {
-        T sum = 0.0;
-        for (unsigned int j = 0; j < N; ++j)
-        {
-            sum += A[j * M + i] * x[j];
-        }
-        y[i] = sum;
-    }
-}
-
-template <typename T, bool vl = false>
-__global__ void compute_matvec2(const unsigned int N, const unsigned int M,
-                                const T *A, const T *x, T *y)
-{
     __shared__ T sum[1];
 
     for (unsigned int i = blockIdx.x; i < M; i += gridDim.x)
@@ -131,9 +113,9 @@ template <typename T> void run_test(const unsigned int size)
     const unsigned int N       = size;
     const unsigned int n_tests = 40;
 
-    // Kokkos results
-    double time_kokkos = std::numeric_limits<double>::max();
-    std::vector<T> result_kokkos(1);
+    // Kokkos results 1
+    double time_kokkos1 = std::numeric_limits<double>::max();
+    std::vector<T> result_kokkos1(1);
     {
         Kokkos::View<T *> d_A("h_A", M * N);
         Kokkos::View<T *> d_x("h_x", N);
@@ -165,12 +147,54 @@ template <typename T> void run_test(const unsigned int size)
             Kokkos::fence();
             time.stop();
             const double t_w = time.elapsedSeconds();
-            time_kokkos      = std::min(time_kokkos, t_w);
+            time_kokkos1     = std::min(time_kokkos1, t_w);
         }
         Kokkos::parallel_reduce(
             M,
             KOKKOS_LAMBDA(unsigned int i, T &val) { val += d_y(i) * d_y(i); },
-            result_kokkos[0]);
+            result_kokkos1[0]);
+    }
+
+    // Kokkos results 2
+    double time_kokkos2 = std::numeric_limits<double>::max();
+    std::vector<T> result_kokkos2(1);
+    {
+        Kokkos::View<T *> d_A("h_A", M * N);
+        Kokkos::View<T *> d_x("h_x", N);
+        Kokkos::View<T *> d_y("h_y", M);
+        Kokkos::parallel_for(
+            N, KOKKOS_LAMBDA(unsigned int j) {
+                d_x[j] = j;
+                for (unsigned int i = 0; i < M; i++)
+                {
+                    d_A[j * M + i] = sin((T)(i * N + j + 1));
+                }
+            });
+        for (unsigned int t = 0; t < n_tests; ++t)
+        {
+            time.start();
+            typedef Kokkos::TeamPolicy<>::member_type team_handle;
+            Kokkos::parallel_for(
+                Kokkos::TeamPolicy<>(M, Kokkos::AUTO),
+                KOKKOS_LAMBDA(const team_handle &team) {
+                    T result;
+                    unsigned int i = team.league_rank();
+                    Kokkos::parallel_reduce(
+                        Kokkos::TeamVectorRange(team, N),
+                        [&](const unsigned int &j, T &sum)
+                        { sum += d_A(j * M + i) * d_x(j); },
+                        result);
+                    d_y(i) = result;
+                });
+            Kokkos::fence();
+            time.stop();
+            const double t_w = time.elapsedSeconds();
+            time_kokkos2     = std::min(time_kokkos2, t_w);
+        }
+        Kokkos::parallel_reduce(
+            M,
+            KOKKOS_LAMBDA(unsigned int i, T &val) { val += d_y(i) * d_y(i); },
+            result_kokkos2[0]);
     }
 
     // cuBLAS kernels 1
@@ -259,7 +283,7 @@ template <typename T> void run_test(const unsigned int size)
             h_x[j] = j;
             for (unsigned int i = 0; i < M; i++)
             {
-                h_A[j * M + i] = std::sin((T)(i * N + j + 1));
+                h_A[i * N + j] = std::sin((T)(i * N + j + 1));
             }
         }
         T *d_A, *d_x, *d_y;
@@ -271,7 +295,7 @@ template <typename T> void run_test(const unsigned int size)
         for (unsigned int t = 0; t < n_tests; ++t)
         {
             time.start();
-            compute_matvec<<<blocks, threads>>>(N, M, d_A, d_x, d_y);
+            compute_matvec<T, false><<<blocks, threads>>>(N, M, d_A, d_x, d_y);
             cudaDeviceSynchronize();
             time.stop();
             time_cuda1 = std::min(time_cuda1, time.elapsedSeconds());
@@ -309,7 +333,7 @@ template <typename T> void run_test(const unsigned int size)
         for (unsigned int t = 0; t < n_tests; ++t)
         {
             time.start();
-            compute_matvec2<T, false><<<blocks, threads>>>(N, M, d_A, d_x, d_y);
+            compute_matvec<T, true><<<blocks, threads>>>(N, M, d_A, d_x, d_y);
             cudaDeviceSynchronize();
             time.stop();
             time_cuda2 = std::min(time_cuda2, time.elapsedSeconds());
@@ -323,64 +347,26 @@ template <typename T> void run_test(const unsigned int size)
         cudaFree(d_y);
     }
 
-    // CUDA 3 kernels
-    double time_cuda3 = std::numeric_limits<double>::max();
-    std::vector<T> result_cuda3(1);
-    {
-        const int threads = 256;
-        const int blocks  = 256;
-        std::vector<T> h_A(M * N), h_x(N);
-        for (unsigned int j = 0; j < N; j++)
-        {
-            h_x[j] = j;
-            for (unsigned int i = 0; i < M; i++)
-            {
-                h_A[i * N + j] = std::sin((T)(i * N + j + 1));
-            }
-        }
-        T *d_A, *d_x, *d_y;
-        cudaMalloc(&d_A, M * N * sizeof(T));
-        cudaMalloc(&d_x, N * sizeof(T));
-        cudaMalloc(&d_y, M * sizeof(T));
-        cudaMemcpy(d_A, &h_A[0], M * N * sizeof(T), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_x, &h_x[0], N * sizeof(T), cudaMemcpyHostToDevice);
-        for (unsigned int t = 0; t < n_tests; ++t)
-        {
-            time.start();
-            compute_matvec2<T, true><<<blocks, threads>>>(N, M, d_A, d_x, d_y);
-            cudaDeviceSynchronize();
-            time.stop();
-            time_cuda3 = std::min(time_cuda3, time.elapsedSeconds());
-        }
-        result_cuda3[0] = thrust::transform_reduce(
-            thrust::device, d_y, d_y + M,
-            [] __device__(const T &x) { return x * x; }, (T)0.0,
-            thrust::plus<T>());
-        cudaFree(d_A);
-        cudaFree(d_x);
-        cudaFree(d_y);
-    }
-
     // Display results
     std::cout << std::setprecision(10);
     std::cout << "Size " << size
-              << "           Kokkos      cuBLAS 1      cuBLAS 2        Cuda 1  "
-                 "      Cuda 2        Cuda 3"
+              << "           Kokkos 1      Kokkos 2      cuBLAS 1      cuBLAS 2        Cuda 1  "
+                 "      Cuda 2"
               << std::endl;
-    std::cout << "Size " << size << " norm: " << std::sqrt(result_kokkos[0])
-              << "     " << std::sqrt(result_cublas1[0]) << "     "
+    std::cout << "Size " << size << " norm: " << std::sqrt(result_kokkos1[0]) << "     " 
+              << std::sqrt(result_kokkos2[0]) << "     "
+              << std::sqrt(result_cublas1[0]) << "     "
               << std::sqrt(result_cublas2[0]) << "     "
               << std::sqrt(result_cuda1[0]) << "     "
-              << std::sqrt(result_cuda2[0]) << "     "
-              << std::sqrt(result_cuda3[0]) << std::endl;
+              << std::sqrt(result_cuda2[0]) << std::endl;
 
     std::cout << "Size " << size
-              << " GB/s: " << sizeof(T) * 1.0e-9 * M * N / time_kokkos
+              << " GB/s: " << sizeof(T) * 1.0e-9 * M * N / time_kokkos1
+              << "     " << sizeof(T) * 1.0e-9 * M * N / time_kokkos2 << "     "
               << "     " << sizeof(T) * 1.0e-9 * M * N / time_cublas1 << "     "
               << sizeof(T) * 1.0e-9 * M * N / time_cublas2 << "     "
               << sizeof(T) * 1.0e-9 * M * N / time_cuda1 << "     "
-              << sizeof(T) * 1.0e-9 * M * N / time_cuda2 << "     "
-              << sizeof(T) * 1.0e-9 * M * N / time_cuda3 << std::endl;
+              << sizeof(T) * 1.0e-9 * M * N / time_cuda2 << std::endl;
 }
 
 int main(int argc, char **argv)
