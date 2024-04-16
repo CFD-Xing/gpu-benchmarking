@@ -117,9 +117,9 @@ template <typename T> void run_test(const unsigned int size)
     double time_kokkos = std::numeric_limits<double>::max();
     std::vector<T> result_kokkos(1);
     {
-        Kokkos::View<T *> d_A("h_A", M * N);
-        Kokkos::View<T *> d_x("h_x", N);
-        Kokkos::View<T *> d_y("h_y", M);
+        Kokkos::View<T *> d_A("d_A", M * N);
+        Kokkos::View<T *> d_x("d_x", N);
+        Kokkos::View<T *> d_y("d_y", M);
         Kokkos::parallel_for(
             N, KOKKOS_LAMBDA(unsigned int j) {
                 d_x[j] = j;
@@ -138,7 +138,7 @@ template <typename T> void run_test(const unsigned int size)
                     T result;
                     unsigned int i = team.league_rank();
                     Kokkos::parallel_reduce(
-                        Kokkos::TeamVectorRange(team, N),
+                        Kokkos::TeamThreadRange(team, N),
                         [&](const unsigned int &j, T &sum)
                         { sum += d_A(i * N + j) * d_x(j); },
                         result);
@@ -178,7 +178,14 @@ template <typename T> void run_test(const unsigned int size)
         for (unsigned int t = 0; t < n_tests; ++t)
         {
             time.start();
-            cublasSgemv('T', M, N, 1.0, d_A, M, d_x, 1, 0.0, d_y, 1);
+            if constexpr (std::is_same_v<T, float>)
+            {
+               cublasSgemv('T', M, N, 1.0f, d_A, M, d_x, 1, 0.0f, d_y, 1);
+            }
+            else if constexpr (std::is_same_v<T, double>)
+            {
+               cublasDgemv('T', M, N, 1.0, d_A, M, d_x, 1, 0.0, d_y, 1);
+            }
             cudaDeviceSynchronize();
             time.stop();
             time_cublas1 = std::min(time_cublas1, time.elapsedSeconds());
@@ -215,7 +222,14 @@ template <typename T> void run_test(const unsigned int size)
         for (unsigned int t = 0; t < n_tests; ++t)
         {
             time.start();
-            cublasSgemv('N', M, N, 1.0, d_A, M, d_x, 1, 0.0, d_y, 1);
+            if constexpr (std::is_same_v<T, float>)
+            {
+               cublasSgemv('N', M, N, 1.0f, d_A, M, d_x, 1, 0.0f, d_y, 1);
+            }
+            else if constexpr (std::is_same_v<T, double>)
+            {
+               cublasDgemv('N', M, N, 1.0, d_A, M, d_x, 1, 0.0, d_y, 1);
+            }
             cudaDeviceSynchronize();
             time.stop();
             time_cublas2 = std::min(time_cublas2, time.elapsedSeconds());
