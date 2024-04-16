@@ -12,8 +12,8 @@
 #include <thrust/tabulate.h>
 #include <thrust/transform_reduce.h>
 
-#include "../utils/timer.h"
 #include "../utils/cuda_vectors.h"
+#include "../utils/timer.h"
 
 template <typename T, bool vl = false>
 __device__ void dot_vl(T *sums, const T *x, const T *y, const unsigned int n)
@@ -113,9 +113,9 @@ template <typename T> void run_test(const unsigned int size)
     const unsigned int N       = size;
     const unsigned int n_tests = 40;
 
-    // Kokkos results 1
-    double time_kokkos1 = std::numeric_limits<double>::max();
-    std::vector<T> result_kokkos1(1);
+    // Kokkos results
+    double time_kokkos = std::numeric_limits<double>::max();
+    std::vector<T> result_kokkos(1);
     {
         Kokkos::View<T *> d_A("h_A", M * N);
         Kokkos::View<T *> d_x("h_x", N);
@@ -147,54 +147,12 @@ template <typename T> void run_test(const unsigned int size)
             Kokkos::fence();
             time.stop();
             const double t_w = time.elapsedSeconds();
-            time_kokkos1     = std::min(time_kokkos1, t_w);
+            time_kokkos      = std::min(time_kokkos, t_w);
         }
         Kokkos::parallel_reduce(
             M,
             KOKKOS_LAMBDA(unsigned int i, T &val) { val += d_y(i) * d_y(i); },
-            result_kokkos1[0]);
-    }
-
-    // Kokkos results 2
-    double time_kokkos2 = std::numeric_limits<double>::max();
-    std::vector<T> result_kokkos2(1);
-    {
-        Kokkos::View<T *> d_A("h_A", M * N);
-        Kokkos::View<T *> d_x("h_x", N);
-        Kokkos::View<T *> d_y("h_y", M);
-        Kokkos::parallel_for(
-            N, KOKKOS_LAMBDA(unsigned int j) {
-                d_x[j] = j;
-                for (unsigned int i = 0; i < M; i++)
-                {
-                    d_A[j * M + i] = sin((T)(i * N + j + 1));
-                }
-            });
-        for (unsigned int t = 0; t < n_tests; ++t)
-        {
-            time.start();
-            typedef Kokkos::TeamPolicy<>::member_type team_handle;
-            Kokkos::parallel_for(
-                Kokkos::TeamPolicy<>(M, Kokkos::AUTO),
-                KOKKOS_LAMBDA(const team_handle &team) {
-                    T result;
-                    unsigned int i = team.league_rank();
-                    Kokkos::parallel_reduce(
-                        Kokkos::TeamVectorRange(team, N),
-                        [&](const unsigned int &j, T &sum)
-                        { sum += d_A(j * M + i) * d_x(j); },
-                        result);
-                    d_y(i) = result;
-                });
-            Kokkos::fence();
-            time.stop();
-            const double t_w = time.elapsedSeconds();
-            time_kokkos2     = std::min(time_kokkos2, t_w);
-        }
-        Kokkos::parallel_reduce(
-            M,
-            KOKKOS_LAMBDA(unsigned int i, T &val) { val += d_y(i) * d_y(i); },
-            result_kokkos2[0]);
+            result_kokkos[0]);
     }
 
     // cuBLAS kernels 1
@@ -350,19 +308,17 @@ template <typename T> void run_test(const unsigned int size)
     // Display results
     std::cout << std::setprecision(10);
     std::cout << "Size " << size
-              << "           Kokkos 1      Kokkos 2      cuBLAS 1      cuBLAS 2        Cuda 1  "
+              << "           Kokkos      cuBLAS 1      cuBLAS 2        Cuda 1  "
                  "      Cuda 2"
               << std::endl;
-    std::cout << "Size " << size << " norm: " << std::sqrt(result_kokkos1[0]) << "     " 
-              << std::sqrt(result_kokkos2[0]) << "     "
-              << std::sqrt(result_cublas1[0]) << "     "
+    std::cout << "Size " << size << " norm: " << std::sqrt(result_kokkos[0])
+              << "     " << std::sqrt(result_cublas1[0]) << "     "
               << std::sqrt(result_cublas2[0]) << "     "
               << std::sqrt(result_cuda1[0]) << "     "
               << std::sqrt(result_cuda2[0]) << std::endl;
 
     std::cout << "Size " << size
-              << " GB/s: " << sizeof(T) * 1.0e-9 * M * N / time_kokkos1
-              << "     " << sizeof(T) * 1.0e-9 * M * N / time_kokkos2 << "     "
+              << " GB/s: " << sizeof(T) * 1.0e-9 * M * N / time_kokkos
               << "     " << sizeof(T) * 1.0e-9 * M * N / time_cublas1 << "     "
               << sizeof(T) * 1.0e-9 * M * N / time_cublas2 << "     "
               << sizeof(T) * 1.0e-9 * M * N / time_cuda1 << "     "
