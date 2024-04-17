@@ -7,8 +7,6 @@
 #include <cublas.h>
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
-#include <thrust/host_vector.h>
-#include <thrust/tabulate.h>
 #include <thrust/transform_reduce.h>
 
 #include "../utils/cuda_vectors.h"
