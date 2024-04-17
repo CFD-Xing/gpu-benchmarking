@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <chrono>
 #include <iomanip>
 #include <iostream>
 
@@ -36,36 +35,30 @@ __global__ void BwdTransQuadKernel(
         T *outptr      = out + nq0 * nq1 * e;
 
         // Copy to shared memory.
-        // for (unsigned int p = threadIdx.y; p < nm0; p += blockDim.y)
         for (unsigned int p = threadIdx.x; p < nm0; p += blockDim.x)
         {
             unsigned int cnt_pi = nq0 * p;
 
-            // for (unsigned int i = threadIdx.x; i < nq0; i += blockDim.x)
             for (unsigned int i = threadIdx.y; i < nq0; i += blockDim.y)
             {
                 s_basis0[cnt_pi + i] = basis0[cnt_pi + i];
             }
         }
 
-        // for (unsigned int q = threadIdx.y; q < nm1; q += blockDim.y)
         for (unsigned int q = threadIdx.x; q < nm1; q += blockDim.x)
         {
             unsigned int cnt_qj = nq1 * q;
 
-            // for (unsigned int j = threadIdx.x; j < nq1; j += blockDim.x)
             for (unsigned int j = threadIdx.y; j < nq1; j += blockDim.y)
             {
                 s_basis1[cnt_qj + j] = basis0[cnt_qj + j];
             }
         }
 
-        // for (unsigned int q = threadIdx.y; q < nm1; q += blockDim.y)
         for (unsigned int q = threadIdx.x; q < nm1; q += blockDim.x)
         {
             unsigned int cnt_qp = nm0 * q;
 
-            // for (unsigned int p = threadIdx.x; p < nm0; p += blockDim.x)
             for (unsigned int p = threadIdx.y; p < nm0; p += blockDim.y)
             {
                 s_wsp0[cnt_qp + p] = inptr[cnt_qp + p];
@@ -74,6 +67,7 @@ __global__ void BwdTransQuadKernel(
 
         __syncthreads();
 
+        // direction 0
         for (unsigned int i = threadIdx.x; i < nq0; i += blockDim.x)
         {
             for (unsigned int q = threadIdx.y; q < nm1; q += blockDim.y)
@@ -92,10 +86,9 @@ __global__ void BwdTransQuadKernel(
 
         __syncthreads();
 
-        // for (unsigned int i = threadIdx.x; i < nq0; i += blockDim.x)
+        // direction 1
         for (unsigned int i = threadIdx.y; i < nq0; i += blockDim.y)
         {
-            // for (unsigned int j = threadIdx.y; j < nq1; j += blockDim.y)
             for (unsigned int j = threadIdx.x; j < nq1; j += blockDim.x)
             {
                 unsigned int cnt_iq = nm1 * i;
@@ -443,7 +436,7 @@ template <typename T> void run_test(const unsigned int size)
 int main(int argc, char **argv)
 {
     Kokkos::initialize(argc, argv);
-    for (unsigned int size = 2 << 6; size < 2 << 15; size <<= 1)
+    for (unsigned int size = 2 << 6; size < 2 << 20; size <<= 1)
     {
         run_test<float>(size);
     }
