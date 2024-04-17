@@ -153,7 +153,7 @@ template <typename T> void run_test(const unsigned int size)
             result_kokkos[0]);
     }
 
-    // cuBLAS kernels 1
+    // cuBLAS kernels 1 - row major
     double time_cublas1 = std::numeric_limits<double>::max();
     std::vector<T> result_cublas1(1);
     {
@@ -197,7 +197,7 @@ template <typename T> void run_test(const unsigned int size)
         cudaFree(d_y);
     }
 
-    // cuBLAS kernels 2
+    // cuBLAS kernels 2 - column major
     double time_cublas2 = std::numeric_limits<double>::max();
     std::vector<T> result_cublas2(1);
     {
@@ -241,7 +241,7 @@ template <typename T> void run_test(const unsigned int size)
         cudaFree(d_y);
     }
 
-    // CUDA 1 kernels
+    // CUDA 1 kernels - No vector loading
     double time_cuda1 = std::numeric_limits<double>::max();
     std::vector<T> result_cuda1(1);
     {
@@ -279,7 +279,7 @@ template <typename T> void run_test(const unsigned int size)
         cudaFree(d_y);
     }
 
-    // CUDA 2 kernels
+    // CUDA 2 kernels - Vector loading
     double time_cuda2 = std::numeric_limits<double>::max();
     std::vector<T> result_cuda2(1);
     {
