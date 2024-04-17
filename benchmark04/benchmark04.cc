@@ -5,7 +5,7 @@
 
 #include <Kokkos_Core.hpp>
 
-#include <cublas.h>
+#include "cublas_v2.h"
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
 #include <thrust/host_vector.h>
@@ -172,7 +172,6 @@ template <typename T> void run_test(const unsigned int size)
                 Kokkos::TeamPolicy<>(nelmt, Kokkos::AUTO)
                     .set_scratch_size(slevel, Kokkos::PerTeam(shmem_size)),
                 KOKKOS_LAMBDA(const team_handle &team) {
-
                     // element index
                     unsigned int e = team.league_rank();
 
@@ -273,6 +272,8 @@ template <typename T> void run_test(const unsigned int size)
     double time_cublas = std::numeric_limits<double>::max();
     std::vector<T> result_cublas(1);
     {
+        cublasHandle_t handle;
+        cublasCreate(&handle);
         std::vector<T> h_in(nelmt * nm0 * nm1);
         std::vector<T> h_out(nelmt * nq0 * nq1);
         std::vector<T> h_basis0(nm0 * nq0);
@@ -314,30 +315,30 @@ template <typename T> void run_test(const unsigned int size)
                    cudaMemcpyHostToDevice);
         cudaMemcpy(d_basis1, &h_basis1[0], nm1 * nq1 * sizeof(T),
                    cudaMemcpyHostToDevice);
+        T alpha = 1.0;
+        T beta  = 0.0;
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
             if constexpr (std::is_same_v<T, float>)
             {
-                cublasSgemm('N', 'N', nq0, nm1 * nelmt, nm0, 1.0f, d_basis0,
-                            nq0, d_in, nm0, 0.0f, d_wsp, nq0);
-                for (unsigned int e = 0u; e < nelmt; ++e)
-                {
-                    cublasSgemm('N', 'T', nq0, nq1, nm1, 1.0f,
-                                d_wsp + e * nq0 * nm1, nq0, d_basis1, nq1, 0.0f,
-                                d_out + e * nq0 * nq1, nq0);
-                }
+                cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, nq0, nm1 * nelmt,
+                            nm0, &alpha, d_basis0, nq0, d_in, nm0, &beta, d_wsp,
+                            nq0);
+                cublasSgemmStridedBatched(handle, CUBLAS_OP_N, CUBLAS_OP_T, nq0,
+                                          nq1, nm1, &alpha, d_wsp, nq0,
+                                          nq0 * nm1, d_basis1, nq1, 0, &beta,
+                                          d_out, nq0, nq0 * nq1, nelmt);
             }
             else if constexpr (std::is_same_v<T, double>)
             {
-                cublasDgemm('N', 'N', nq0, nm1 * nelmt, nm0, 1.0, d_basis0, nq0,
-                            d_in, nm0, 0.0, d_wsp, nq0);
-                for (unsigned int e = 0u; e < nelmt; ++e)
-                {
-                    cublasDgemm('N', 'T', nq0, nq1, nm1, 1.0,
-                                d_wsp + e * nq0 * nm1, nq0, d_basis1, nq1, 0.0,
-                                d_out + e * nq0 * nq1, nq0);
-                }
+                cublasDgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, nq0, nm1 * nelmt,
+                            nm0, &alpha, d_basis0, nq0, d_in, nm0, &beta, d_wsp,
+                            nq0);
+                cublasDgemmStridedBatched(handle, CUBLAS_OP_N, CUBLAS_OP_T, nq0,
+                                          nq1, nm1, &alpha, d_wsp, nq0,
+                                          nq0 * nm1, d_basis1, nq1, 0, &beta,
+                                          d_out, nq0, nq0 * nq1, nelmt);
             }
             cudaDeviceSynchronize();
             time.stop();
@@ -351,6 +352,7 @@ template <typename T> void run_test(const unsigned int size)
         cudaFree(d_basis1);
         cudaFree(d_in);
         cudaFree(d_out);
+        cublasDestroy(handle);
     }
 
     // CUDA kernels
