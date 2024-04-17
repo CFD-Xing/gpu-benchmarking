@@ -594,6 +594,9 @@ int main(int argc, char **argv)
     unsigned int nq0 = (argc > 1) ? atoi(argv[1]) : 16u;
     unsigned int nq1 = (argc > 2) ? atoi(argv[2]) : 16u;
 
+    std::cout << "--------------------------------" << std::endl;
+    std::cout << "Benchmark04 : BwdTrans          " << std::endl;
+    std::cout << "--------------------------------" << std::endl;
     std::cout << "nq0 = " << nq0 << " nq1 = " << nq1 << std::endl;
     Kokkos::initialize(argc, argv);
     for (unsigned int size = 2 << 6; size < 2 << 20; size <<= 1)

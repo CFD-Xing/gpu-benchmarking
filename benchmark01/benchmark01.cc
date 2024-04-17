@@ -184,7 +184,7 @@ template <typename T> void run_test(const unsigned int size)
         }
     }
 
-    // CUDA kernels 1
+    // CUDA kernels 1 - No vector loading
     double time_cuda1 = std::numeric_limits<double>::max();
     std::vector<T> result_cuda1(1);
     {
@@ -213,7 +213,7 @@ template <typename T> void run_test(const unsigned int size)
         }
     }
 
-    // CUDA kernels 2
+    // CUDA kernels 2 - Vector loading
     double time_cuda2 = std::numeric_limits<double>::max();
     std::vector<T> result_cuda2(1);
     {
@@ -260,6 +260,9 @@ template <typename T> void run_test(const unsigned int size)
 
 int main(int argc, char **argv)
 {
+    std::cout << "--------------------------------" << std::endl;
+    std::cout << "Benchmark01 : L2 norm reduction " << std::endl;
+    std::cout << "--------------------------------" << std::endl;
     Kokkos::initialize(argc, argv);
     for (unsigned int size = 1024; size < 1000000000u; size *= 2)
     {

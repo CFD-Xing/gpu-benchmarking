@@ -339,6 +339,9 @@ template <typename T> void run_test(const unsigned int size)
 
 int main(int argc, char **argv)
 {
+    std::cout << "--------------------------------" << std::endl;
+    std::cout << "Benchmark03 : Matrix-Vector Mult" << std::endl;
+    std::cout << "--------------------------------" << std::endl;
     Kokkos::initialize(argc, argv);
     for (unsigned int size = 2 << 6; size < 2 << 15; size *= 2)
     {
