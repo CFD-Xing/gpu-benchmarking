@@ -25,8 +25,8 @@ __global__ void BwdTransQuadKernel(
     extern __shared__ T shared[];
     T *s_basis0 = shared;
     T *s_basis1 = shared + nm0 * nq0;
-    T *s_wsp0 = s_basis1 + nm1 * nq1;
-    T *s_wsp1 = s_wsp0 + nmTot;
+    T *s_wsp0   = s_basis1 + nm1 * nq1;
+    T *s_wsp1   = s_wsp0 + nmTot;
 
     unsigned int e = blockIdx.x;
 
@@ -36,36 +36,36 @@ __global__ void BwdTransQuadKernel(
         T *outptr      = out + nq0 * nq1 * e;
 
         // Copy to shared memory.
-        //for (unsigned int p = threadIdx.y; p < nm0; p += blockDim.y)
+        // for (unsigned int p = threadIdx.y; p < nm0; p += blockDim.y)
         for (unsigned int p = threadIdx.x; p < nm0; p += blockDim.x)
         {
             unsigned int cnt_pi = nq0 * p;
 
-            //for (unsigned int i = threadIdx.x; i < nq0; i += blockDim.x)
+            // for (unsigned int i = threadIdx.x; i < nq0; i += blockDim.x)
             for (unsigned int i = threadIdx.y; i < nq0; i += blockDim.y)
             {
                 s_basis0[cnt_pi + i] = basis0[cnt_pi + i];
             }
         }
 
-        //for (unsigned int q = threadIdx.y; q < nm1; q += blockDim.y)
+        // for (unsigned int q = threadIdx.y; q < nm1; q += blockDim.y)
         for (unsigned int q = threadIdx.x; q < nm1; q += blockDim.x)
         {
             unsigned int cnt_qj = nq1 * q;
 
-            //for (unsigned int j = threadIdx.x; j < nq1; j += blockDim.x)
+            // for (unsigned int j = threadIdx.x; j < nq1; j += blockDim.x)
             for (unsigned int j = threadIdx.y; j < nq1; j += blockDim.y)
             {
                 s_basis1[cnt_qj + j] = basis0[cnt_qj + j];
             }
         }
 
-        //for (unsigned int q = threadIdx.y; q < nm1; q += blockDim.y)
+        // for (unsigned int q = threadIdx.y; q < nm1; q += blockDim.y)
         for (unsigned int q = threadIdx.x; q < nm1; q += blockDim.x)
         {
             unsigned int cnt_qp = nm0 * q;
 
-            //for (unsigned int p = threadIdx.x; p < nm0; p += blockDim.x)
+            // for (unsigned int p = threadIdx.x; p < nm0; p += blockDim.x)
             for (unsigned int p = threadIdx.y; p < nm0; p += blockDim.y)
             {
                 s_wsp0[cnt_qp + p] = inptr[cnt_qp + p];
@@ -82,7 +82,7 @@ __global__ void BwdTransQuadKernel(
                 unsigned int cnt_qp = nm0 * q;
 
                 T tmp = 0.0;
-                for (unsigned int p = 0; p < nm0; ++p, ++cnt_qp)
+                for (unsigned int p = 0u; p < nm0; ++p, ++cnt_qp)
                 {
                     tmp += s_wsp0[cnt_qp] * s_basis0[p * nq0 + i];
                 }
@@ -92,17 +92,17 @@ __global__ void BwdTransQuadKernel(
 
         __syncthreads();
 
-        //for (unsigned int i = threadIdx.x; i < nq0; i += blockDim.x)
+        // for (unsigned int i = threadIdx.x; i < nq0; i += blockDim.x)
         for (unsigned int i = threadIdx.y; i < nq0; i += blockDim.y)
         {
-            //for (unsigned int j = threadIdx.y; j < nq1; j += blockDim.y)
+            // for (unsigned int j = threadIdx.y; j < nq1; j += blockDim.y)
             for (unsigned int j = threadIdx.x; j < nq1; j += blockDim.x)
             {
                 unsigned int cnt_iq = nm1 * i;
                 unsigned int cnt_ji = nq0 * j + i;
 
                 T tmp = 0.0;
-                for (unsigned int q = 0; q < nm1; ++q, ++cnt_iq)
+                for (unsigned int q = 0u; q < nm1; ++q, ++cnt_iq)
                 {
                     tmp += s_wsp1[cnt_iq] * s_basis1[q * nq1 + j];
                 }
@@ -120,11 +120,11 @@ template <typename T> void run_test(const unsigned int size)
 {
     Timer time;
     const unsigned int nelmt   = size;
-    const unsigned int nq0     = 12;
-    const unsigned int nq1     = 12;
-    const unsigned int nm0     = nq0 - 1;
-    const unsigned int nm1     = nq1 - 1;
-    const unsigned int n_tests = 40;
+    const unsigned int nq0     = 16u;
+    const unsigned int nq1     = 16u;
+    const unsigned int nm0     = nq0 - 1u;
+    const unsigned int nm1     = nq1 - 1u;
+    const unsigned int n_tests = 40u;
 
     // Kokkos results
     typedef Kokkos::TeamPolicy<>::member_type team_handle;
@@ -157,31 +157,30 @@ template <typename T> void run_test(const unsigned int size)
             KOKKOS_LAMBDA(const unsigned q, const unsigned j) {
                 d_basis1(q * nq1 + j) = cos((T)(q * nq1 + j));
             });
-        for (unsigned int t = 0; t < n_tests; ++t)
+        for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            const unsigned int slevel = 0;
+            const unsigned int slevel = 0u;
             const unsigned int ssize =
                 nm0 * nq0 + nm1 * nq1 + nm0 * nm1 + nq0 * nm1;
 
             const unsigned int shmem_size = Kokkos::View<
-                T*,
-                Kokkos::DefaultExecutionSpace::scratch_memory_space,
+                T *, Kokkos::DefaultExecutionSpace::scratch_memory_space,
                 Kokkos::MemoryTraits<Kokkos::Unmanaged>>::shmem_size(ssize);
 
             Kokkos::parallel_for(
                 Kokkos::TeamPolicy<>(nelmt, Kokkos::AUTO)
-                    .set_scratch_size(slevel,
-                                      Kokkos::PerTeam(shmem_size)),
+                    .set_scratch_size(slevel, Kokkos::PerTeam(shmem_size)),
                 KOKKOS_LAMBDA(const team_handle &team) {
 
                     // element index
                     unsigned int e = team.league_rank();
 
-                    // shared memory pointer assignment
-                    Kokkos::View<T *,
-                                 Kokkos::DefaultExecutionSpace::scratch_memory_space,
-                                 Kokkos::MemoryTraits<Kokkos::Unmanaged>>
+                    // shared memory subview assignment
+                    Kokkos::View<
+                        T *,
+                        Kokkos::DefaultExecutionSpace::scratch_memory_space,
+                        Kokkos::MemoryTraits<Kokkos::Unmanaged>>
                         scratch(team.team_scratch(slevel), ssize);
                     auto s_basis0 = Kokkos::subview(
                         scratch, Kokkos::make_pair(0u, nm0 * nq0));
@@ -229,7 +228,7 @@ template <typename T> void run_test(const unsigned int size)
                             unsigned int cnt_qp = nm0 * q;
 
                             T tmp = 0.0;
-                            for (unsigned int p = 0; p < nm0; ++p, ++cnt_qp)
+                            for (unsigned int p = 0u; p < nm0; ++p, ++cnt_qp)
                             {
                                 tmp += s_wsp0(cnt_qp) * s_basis0(p * nq0 + i);
                             }
@@ -248,7 +247,7 @@ template <typename T> void run_test(const unsigned int size)
                             unsigned int cnt_ji = nq0 * j + i;
 
                             T tmp = 0.0;
-                            for (unsigned int q = 0; q < nm1; ++q, ++cnt_iq)
+                            for (unsigned int q = 0u; q < nm1; ++q, ++cnt_iq)
                             {
                                 tmp += s_wsp1(cnt_iq) * s_basis1(q * nq1 + j);
                             }
@@ -256,7 +255,6 @@ template <typename T> void run_test(const unsigned int size)
                         });
 
                     team.team_barrier();
-
                 });
             Kokkos::fence();
             time.stop();
@@ -286,7 +284,7 @@ template <typename T> void run_test(const unsigned int size)
                 for (unsigned int q = 0u; q < nm1; q++)
                 {
                     h_in[e * nm0 * nm1 + p * nm1 + q] =
-                        sin((T)(p * nm1 + q + 1));
+                        sin((T)(p * nm1 + q + 1u));
                 }
             }
         }
@@ -316,7 +314,7 @@ template <typename T> void run_test(const unsigned int size)
                    cudaMemcpyHostToDevice);
         cudaMemcpy(d_basis1, &h_basis1[0], nm1 * nq1 * sizeof(T),
                    cudaMemcpyHostToDevice);
-        for (unsigned int t = 0; t < n_tests; ++t)
+        for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
             if constexpr (std::is_same_v<T, float>)
@@ -400,9 +398,8 @@ template <typename T> void run_test(const unsigned int size)
                    cudaMemcpyHostToDevice);
         cudaMemcpy(d_basis1, &h_basis1[0], nm1 * nq1 * sizeof(T),
                    cudaMemcpyHostToDevice);
-        //const unsigned int ssize = nm0 * nm1 + nq0 * nm1;
         const unsigned int ssize =
-             nm0 * nq0 + nm1 * nq1 + nm0 * nm1 + nq0 * nm1;
+            nm0 * nq0 + nm1 * nq1 + nm0 * nm1 + nq0 * nm1;
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
@@ -444,7 +441,7 @@ template <typename T> void run_test(const unsigned int size)
 int main(int argc, char **argv)
 {
     Kokkos::initialize(argc, argv);
-    for (unsigned int size = 2 << 6; size < 2 << 15; size *= 2)
+    for (unsigned int size = 2 << 6; size < 2 << 15; size <<= 1)
     {
         run_test<float>(size);
     }
