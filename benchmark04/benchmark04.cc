@@ -398,7 +398,7 @@ template <typename T> void run_test(const unsigned int size)
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransQuadKernel<<<blocks, dim3(8, 8), sizeof(T) * ssize>>>(
+            BwdTransQuadKernel<<<blocks, dim3(nq0, nq1), sizeof(T) * ssize>>>(
                 nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1, d_in,
                 d_out);
             cudaDeviceSynchronize();
