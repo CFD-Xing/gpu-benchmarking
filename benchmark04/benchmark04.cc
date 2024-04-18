@@ -12,7 +12,7 @@
 #include "../utils/cuda_vectors.h"
 #include "../utils/timer.h"
 
-template <typename T, bool shmem = false>
+template <typename T, bool shmem = false, bool coal = false>
 __global__ void BwdTransQuadKernel(
     const unsigned int nm0, const unsigned int nm1, const unsigned int nmTot,
     const unsigned int nq0, const unsigned int nq1, const unsigned int nelmt,
@@ -49,30 +49,48 @@ __global__ void BwdTransQuadKernel(
 
     while (e < nelmt)
     {
-        const T *inptr = in + nmTot * e;
-        T *outptr      = out + nq0 * nq1 * e;
-        T *wsp0        = wsp + nm1 * e;
-
         for (unsigned int i = 0; i < nq0; ++i)
         {
             for (unsigned int q = 0, cnt_qp = 0; q < nm1; ++q)
             {
                 T tmp = 0.0;
-                for (unsigned int p = 0; p < nm0; ++p, ++cnt_qp)
+                if constexpr (coal)
                 {
-                    tmp += inptr[cnt_qp] * s_basis0[p * nq0 + i];
+                    for (unsigned int p = 0; p < nm0; ++p, ++cnt_qp)
+                    {
+                        tmp += in[nelmt * cnt_qp + e] * s_basis0[p * nq0 + i];
+                    }
+                    wsp[nelmt * q + e] = tmp;
                 }
-                wsp0[q] = tmp;
+                else
+                {
+                    for (unsigned int p = 0; p < nm0; ++p, ++cnt_qp)
+                    {
+                        tmp += in[nmTot * e + cnt_qp] * s_basis0[p * nq0 + i];
+                    }
+                    wsp[nm1 * e + q] = tmp;
+                }
             }
 
             for (unsigned int j = 0; j < nq1; ++j)
             {
                 T tmp = 0.0;
-                for (unsigned int q = 0; q < nm1; ++q)
+                if constexpr (coal)
                 {
-                    tmp += wsp0[q] * s_basis1[q * nq1 + j];
+                    for (unsigned int q = 0; q < nm1; ++q)
+                    {
+                        tmp += wsp[nelmt * q + e] * s_basis1[q * nq1 + j];
+                    }
+                    out[nelmt * (nq0 * j + i) + e] = tmp;
                 }
-                outptr[nq0 * j + i] = tmp;
+                else
+                {
+                    for (unsigned int q = 0; q < nm1; ++q)
+                    {
+                        tmp += wsp[nm1 * e + q] * s_basis1[q * nq1 + j];
+                    }
+                    out[nq0 * nq1 * e + nq0 * j + i] = tmp;
+                }
             }
         }
 
@@ -553,6 +571,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         const int threads = 256;
         const int blocks = 256;
         std::vector<T> h_in(nelmt * nm0 * nm1);
+        std::vector<T> h_in_coa(nelmt * nm0 * nm1);
         std::vector<T> h_out(nelmt * nq0 * nq1);
         std::vector<T> h_basis0(nm0 * nq0);
         std::vector<T> h_basis1(nm1 * nq1);
@@ -563,6 +582,8 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                 for (unsigned int q = 0u; q < nm1; q++)
                 {
                     h_in[e * nm0 * nm1 + p * nm1 + q] =
+                        sin((T)(p * nm1 + q + 1));
+                    h_in_coa[(p * nm1 + q) * nelmt + e] =
                         sin((T)(p * nm1 + q + 1));
                 }
             }
@@ -581,8 +602,9 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                 h_basis1[q * nq1 + j] = std::cos((T)(q * nq1 + j));
             }
         }
-        T *d_in, *d_wsp, *d_wsp0, *d_out, *d_basis0, *d_basis1;
+        T *d_in, *d_in_coa, *d_wsp, *d_wsp0, *d_out, *d_basis0, *d_basis1;
         cudaMalloc(&d_in, nelmt * nm0 * nm1 * sizeof(T));
+        cudaMalloc(&d_in_coa, nelmt * nm0 * nm1 * sizeof(T));
         cudaMalloc(&d_wsp, nelmt * nq0 * nm1 * sizeof(T));
         cudaMalloc(&d_wsp0, nelmt * nm1 * sizeof(T));
         cudaMalloc(&d_out, nelmt * nq0 * nq1 * sizeof(T));
@@ -590,16 +612,18 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         cudaMalloc(&d_basis1, nm1 * nq1 * sizeof(T));
         cudaMemcpy(d_in, &h_in[0], nelmt * nm0 * nm1 * sizeof(T),
                    cudaMemcpyHostToDevice);
+        cudaMemcpy(d_in_coa, &h_in_coa[0], nelmt * nm0 * nm1 * sizeof(T),
+                   cudaMemcpyHostToDevice);
         cudaMemcpy(d_basis0, &h_basis0[0], nm0 * nq0 * sizeof(T),
                    cudaMemcpyHostToDevice);
         cudaMemcpy(d_basis1, &h_basis1[0], nm1 * nq1 * sizeof(T),
                    cudaMemcpyHostToDevice);
 
-        // Cuda 1 - No shared memory
+        // Cuda 1 - Non coalesce
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransQuadKernel<T, false><<<blocks, threads>>>(
+            BwdTransQuadKernel<T, false, false><<<blocks, threads>>>(
                 nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1, d_in,
                 d_wsp0, d_out);
             cudaDeviceSynchronize();
@@ -611,13 +635,13 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             [] __device__(const T &x) { return x * x; }, (T)0.0,
             thrust::plus<T>());
 
-        // Cuda 2 - Shared memory
+        // Cuda 2 - Coalesce
         const unsigned int ssize1 = nm0 * nq0 + nm1 * nq1;
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransQuadKernel<T, true><<<blocks, threads, sizeof(T) * ssize1>>>(
-                nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1, d_in,
+            BwdTransQuadKernel<T, false, true><<<blocks, threads, sizeof(T) * ssize1>>>(
+                nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1, d_in_coa,
                 d_wsp0, d_out);
             cudaDeviceSynchronize();
             time.stop();
