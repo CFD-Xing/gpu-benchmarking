@@ -23,6 +23,6 @@ Clone the benchmarking code from GitHub:
 ------------------
 Compile the benchmakring code:
 
-    $ cd gpu-benchmarking/benchmark04
+    $ cd gpu-benchmarking/benchmark05
     $ mkdir build && cd build
     $ cmake ../. -DKokkos_ROOT=~/kokkos-install/
