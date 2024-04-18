@@ -515,14 +515,15 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             time.start();
             const unsigned int slevel = 1u;
             const unsigned int ssize  = nm0 * nq0 + nm1 * nq1 + nm2 * nq2 +
-                                       nm0 * nm1 * nm2 + nq0 * nm1 * nm2;
+                                       nm0 * nm1 * nm2 + nq0 * nm1 * nm2 +
+                                       nq0 * nq1 * nm2;
 
             const unsigned int shmem_size = Kokkos::View<
                 T *, Kokkos::DefaultExecutionSpace::scratch_memory_space,
                 Kokkos::MemoryTraits<Kokkos::Unmanaged>>::shmem_size(ssize);
 
             Kokkos::parallel_for(
-                Kokkos::TeamPolicy<>(nelmt, 128)
+                Kokkos::TeamPolicy<>(nelmt, Kokkos::AUTO)
                     .set_scratch_size(slevel, Kokkos::PerTeam(shmem_size)),
                 KOKKOS_LAMBDA(const team_handle &team) {
                     // element index
@@ -577,7 +578,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                         Kokkos::TeamThreadMDRange<Kokkos::Rank<2>, team_handle>(
                             team, nm2, nq2),
                         [&](const unsigned int &r, const unsigned int &k)
-                        { s_basis2(r * nq2 + k) = d_basis1(r * nq2 + k); });
+                        { s_basis2(r * nq2 + k) = d_basis2(r * nq2 + k); });
 
                     Kokkos::parallel_for(
                         Kokkos::TeamThreadMDRange<Kokkos::Rank<3>, team_handle>(
@@ -585,7 +586,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                         [&](const unsigned int &r, const unsigned int &q,
                             const unsigned int &p)
                         {
-                            s_wsp0(q * nm0 + p) =
+                            s_wsp0(nm1 * nm0 * r + nm0 * q + p) =
                                 d_in(nm0 * nm1 * nm2 * e + nm1 * nm0 * r +
                                      nm0 * q + p);
                         });
@@ -605,8 +606,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                             T tmp = 0.0;
                             for (unsigned int p = 0u; p < nm0; ++p, ++cnt_rqp)
                             {
-                                tmp += d_in(nm0 * nm1 * nm2 * e + cnt_rqp) *
-                                       d_basis0(p * nq0 + i);
+                                tmp += s_wsp0(cnt_rqp) * s_basis0(p * nq0 + i);
                             }
                             s_wsp1(cnt_irq) = tmp;
                         });
@@ -626,7 +626,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                             T tmp = 0.0;
                             for (unsigned int q = 0u; q < nm1; ++q, ++cnt_irq)
                             {
-                                tmp += s_wsp1(cnt_irq) * d_basis1(q * nq1 + j);
+                                tmp += s_wsp1(cnt_irq) * s_basis1(q * nq1 + j);
                             }
                             s_wsp2(cnt_jir) = tmp;
                         });
@@ -646,7 +646,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                             T tmp = 0.0;
                             for (unsigned int r = 0u; r < nm2; ++r, ++cnt_jir)
                             {
-                                tmp += s_wsp2(cnt_jir) * d_basis2(r * nq2 + k);
+                                tmp += s_wsp2(cnt_jir) * s_basis2(r * nq2 + k);
                             }
                             d_out(nq0 * nq1 * nq2 * e + cnt_kji) = tmp;
                         });
