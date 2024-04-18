@@ -321,7 +321,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                                 tmp += d_in(nm0 * nm1 * e + cnt_qp) *
                                        d_basis0(p * nq0 + i);
                             }
-                            d_wsp(nm0 * nq1 * e + cnt_iq) = tmp;
+                            d_wsp(nm1 * nq0 * e + cnt_iq) = tmp;
                         });
 
                     team.team_barrier();
@@ -338,7 +338,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                             T tmp = 0.0;
                             for (unsigned int q = 0u; q < nm1; ++q, ++cnt_iq)
                             {
-                                tmp += d_wsp(nm0 * nq1 * e + cnt_iq) *
+                                tmp += d_wsp(nm1 * nq0 * e + cnt_iq) *
                                        d_basis1(q * nq1 + j);
                             }
                             d_out(nq0 * nq1 * e + cnt_ji) = tmp;
