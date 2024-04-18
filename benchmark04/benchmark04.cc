@@ -163,7 +163,7 @@ __global__ void BwdTransQuadKernel_QP(
 {
     extern __shared__ T shared[];
     T *s_basis0 = shared;
-    T *s_basis1 = shared + nm0 * nq0;
+    T *s_basis1 = s_basis0 + nm0 * nq0;
     T *s_wsp0   = s_basis1 + nm1 * nq1;
     T *s_wsp1   = s_wsp0 + nmTot;
 
@@ -191,7 +191,7 @@ __global__ void BwdTransQuadKernel_QP(
 
             for (unsigned int j = threadIdx.y; j < nq1; j += blockDim.y)
             {
-                s_basis1[cnt_qj + j] = basis0[cnt_qj + j];
+                s_basis1[cnt_qj + j] = basis1[cnt_qj + j];
             }
         }
 
