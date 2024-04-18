@@ -115,9 +115,9 @@ __global__ void BwdTransQuadKernel_QP(
         __syncthreads();
 
         // direction 1
-        for (unsigned int i = threadIdx.y; i < nq0; i += blockDim.y)
+        for (unsigned int j = threadIdx.x; j < nq1; j += blockDim.x)
         {
-            for (unsigned int j = threadIdx.x; j < nq1; j += blockDim.x)
+            for (unsigned int i = threadIdx.y; i < nq0; i += blockDim.y)
             {
                 unsigned int cnt_iq = nm1 * i;
                 unsigned int cnt_ji = nq0 * j + i;
@@ -210,9 +210,9 @@ __global__ void BwdTransQuadKernel_QP(
         __syncthreads();
 
         // direction 1
-        for (unsigned int i = threadIdx.y; i < nq0; i += blockDim.y)
+        for (unsigned int j = threadIdx.x; j < nq1; j += blockDim.x)
         {
-            for (unsigned int j = threadIdx.x; j < nq1; j += blockDim.x)
+            for (unsigned int i = threadIdx.y; i < nq0; i += blockDim.y)
             {
                 unsigned int cnt_iq = nm1 * i;
                 unsigned int cnt_ji = nq0 * j + i;
