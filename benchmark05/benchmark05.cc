@@ -513,7 +513,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            const unsigned int slevel = 1u;
+            const unsigned int slevel = 0u;
             const unsigned int ssize  = nm0 * nq0 + nm1 * nq1 + nm2 * nq2 +
                                        nm0 * nm1 * nm2 + nq0 * nm1 * nm2 +
                                        nq0 * nq1 * nm2;
