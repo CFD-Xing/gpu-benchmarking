@@ -553,6 +553,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         cudaFree(d_basis0);
         cudaFree(d_basis1);
         cudaFree(d_in);
+        cudaFree(d_wsp);
         cudaFree(d_out);
         cublasDestroy(handle);
     }
@@ -601,11 +602,11 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                 h_basis1[q * nq1 + j] = std::cos((T)(q * nq1 + j));
             }
         }
-        T *d_in, *d_in_coa, *d_wsp, *d_wsp0, *d_out, *d_basis0, *d_basis1;
+        T *d_in, *d_in_coa, *d_wsp0, *d_wsp1, *d_out, *d_basis0, *d_basis1;
         cudaMalloc(&d_in, nelmt * nm0 * nm1 * sizeof(T));
         cudaMalloc(&d_in_coa, nelmt * nm0 * nm1 * sizeof(T));
-        cudaMalloc(&d_wsp, nelmt * nq0 * nm1 * sizeof(T));
         cudaMalloc(&d_wsp0, nelmt * nm1 * sizeof(T));
+        cudaMalloc(&d_wsp1, nelmt * nq0 * nm1 * sizeof(T));
         cudaMalloc(&d_out, nelmt * nq0 * nq1 * sizeof(T));
         cudaMalloc(&d_basis0, nm0 * nq0 * sizeof(T));
         cudaMalloc(&d_basis1, nm1 * nq1 * sizeof(T));
@@ -661,7 +662,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             BwdTransQuadKernel_QP<<<blocks, dim3(std::min(nq0, 16u),
                                                  std::min(nq1, 16u))>>>(
                 nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1, d_in,
-                d_wsp, d_out);
+                d_wsp1, d_out);
             cudaDeviceSynchronize();
             time.stop();
             time_cuda3 = std::min(time_cuda3, time.elapsedSeconds());
@@ -692,6 +693,9 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         cudaFree(d_basis0);
         cudaFree(d_basis1);
         cudaFree(d_in);
+        cudaFree(d_in_coa);
+        cudaFree(d_wsp0);
+        cudaFree(d_wsp1);
         cudaFree(d_out);
     }
 
@@ -734,7 +738,7 @@ int main(int argc, char **argv)
     unsigned int nq1 = (argc > 2) ? atoi(argv[2]) : 16u;
 
     std::cout << "--------------------------------" << std::endl;
-    std::cout << "Benchmark04 : BwdTrans          " << std::endl;
+    std::cout << "Benchmark04 : BwdTrans (2D)     " << std::endl;
     std::cout << "--------------------------------" << std::endl;
     std::cout << "nq0 = " << nq0 << " nq1 = " << nq1 << std::endl;
     Kokkos::initialize(argc, argv);
