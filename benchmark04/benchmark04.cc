@@ -16,9 +16,8 @@ template <typename T, bool shmem = false, bool coal = false>
 __global__ void BwdTransQuadKernel(
     const unsigned int nm0, const unsigned int nm1, const unsigned int nmTot,
     const unsigned int nq0, const unsigned int nq1, const unsigned int nelmt,
-    T *__restrict__ basis0, T *__restrict__ basis1,
-    const T *__restrict__ in, T *__restrict__ wsp,
-    T *__restrict__ out)
+    T *__restrict__ basis0, T *__restrict__ basis1, const T *__restrict__ in,
+    T *__restrict__ wsp, T *__restrict__ out)
 {
     extern __shared__ T shared[];
 
@@ -569,7 +568,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
     std::vector<T> result_cuda4(1);
     {
         const int threads = 256;
-        const int blocks = 256;
+        const int blocks  = 256;
         std::vector<T> h_in(nelmt * nm0 * nm1);
         std::vector<T> h_in_coa(nelmt * nm0 * nm1);
         std::vector<T> h_out(nelmt * nq0 * nq1);
@@ -623,9 +622,9 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransQuadKernel<T, false, false><<<blocks, threads>>>(
-                nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1, d_in,
-                d_wsp0, d_out);
+            BwdTransQuadKernel<T, false, false>
+                <<<blocks, threads>>>(nm0, nm1, nm0 * nm1, nq0, nq1, nelmt,
+                                      d_basis0, d_basis1, d_in, d_wsp0, d_out);
             cudaDeviceSynchronize();
             time.stop();
             time_cuda1 = std::min(time_cuda1, time.elapsedSeconds());
@@ -640,9 +639,10 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransQuadKernel<T, false, true><<<blocks, threads, sizeof(T) * ssize1>>>(
-                nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1, d_in_coa,
-                d_wsp0, d_out);
+            BwdTransQuadKernel<T, false, true>
+                <<<blocks, threads, sizeof(T) * ssize1>>>(
+                    nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1,
+                    d_in_coa, d_wsp0, d_out);
             cudaDeviceSynchronize();
             time.stop();
             time_cuda2 = std::min(time_cuda2, time.elapsedSeconds());
@@ -657,7 +657,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         {
             time.start();
             BwdTransQuadKernel_QP<<<blocks, dim3(std::min(nq0, 16u),
-                                              std::min(nq1, 16u))>>>(
+                                                 std::min(nq1, 16u))>>>(
                 nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1, d_in,
                 d_wsp, d_out);
             cudaDeviceSynchronize();
@@ -675,11 +675,10 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransQuadKernel_QP<<<blocks,
-                                 dim3(std::min(nq0, 16u), std::min(nq1, 16u)),
-                                 sizeof(T) * ssize4>>>(nm0, nm1, nm0 * nm1, nq0,
-                                                      nq1, nelmt, d_basis0,
-                                                      d_basis1, d_in, d_out);
+            BwdTransQuadKernel_QP<<<
+                blocks, dim3(std::min(nq0, 16u), std::min(nq1, 16u)),
+                sizeof(T) * ssize4>>>(nm0, nm1, nm0 * nm1, nq0, nq1, nelmt,
+                                      d_basis0, d_basis1, d_in, d_out);
             cudaDeviceSynchronize();
             time.stop();
             time_cuda4 = std::min(time_cuda4, time.elapsedSeconds());
@@ -696,16 +695,17 @@ void run_test(const unsigned int size, const unsigned int _nq0,
 
     // Display results
     std::cout << std::setprecision(10);
-    std::cout << "nelmt " << nelmt
-              << "           Kokkos 1      Kokkos 2     cuBLAS          Cuda 1     "
-                 "   Cuda 2        Cuda 3        Cuda 4"
-              << std::endl;
+    std::cout
+        << "nelmt " << nelmt
+        << "           Kokkos 1      Kokkos 2     cuBLAS          Cuda 1     "
+           "   Cuda 2        Cuda 3        Cuda 4"
+        << std::endl;
     std::cout << "nelmt " << nelmt << " norm: " << std::sqrt(result_kokkos1[0])
-              << "     " << std::sqrt(result_kokkos2[0]) 
-              << "     " << std::sqrt(result_cublas[0]) 
-              << "     " << std::sqrt(result_cuda1[0]) 
-              << "     " << std::sqrt(result_cuda2[0])
-              << "     " << std::sqrt(result_cuda3[0]) << "     "
+              << "     " << std::sqrt(result_kokkos2[0]) << "     "
+              << std::sqrt(result_cublas[0]) << "     "
+              << std::sqrt(result_cuda1[0]) << "     "
+              << std::sqrt(result_cuda2[0]) << "     "
+              << std::sqrt(result_cuda3[0]) << "     "
               << std::sqrt(result_cuda4[0]) << std::endl;
 
     std::cout
