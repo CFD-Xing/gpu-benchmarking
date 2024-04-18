@@ -281,13 +281,13 @@ __global__ void BwdTransHexKernel_QP(
             }
         }
 
-        for (unsigned int r = threadIdx.z; r < nm2; r += blockDim.z)
+        for (unsigned int r = threadIdx.x; r < nm2; r += blockDim.x)
         {
             for (unsigned int q = threadIdx.y; q < nm1; q += blockDim.y)
             {
                 unsigned int cnt_rqp = nm1 * nm0 * r + nm0 * q;
 
-                for (unsigned int p = threadIdx.x; p < nm0; p += blockDim.x)
+                for (unsigned int p = threadIdx.z; p < nm0; p += blockDim.z)
                 {
                     s_wsp0[cnt_rqp + p] = inptr[cnt_rqp + p];
                 }
@@ -299,9 +299,9 @@ __global__ void BwdTransHexKernel_QP(
         // direction 0
         for (unsigned int i = threadIdx.x; i < nq0; i += blockDim.x)
         {
-            for (unsigned int r = threadIdx.z; r < nm2; r += blockDim.z)
+            for (unsigned int r = threadIdx.y; r < nm2; r += blockDim.y)
             {
-                for (unsigned int q = threadIdx.y; q < nm1; q += blockDim.y)
+                for (unsigned int q = threadIdx.z; q < nm1; q += blockDim.z)
                 {
                     unsigned int cnt_rqp = nm1 * nm0 * r + nm0 * q;
                     unsigned int cnt_irq = nm1 * nm2 * i + nm1 * r + q;
@@ -319,9 +319,9 @@ __global__ void BwdTransHexKernel_QP(
         __syncthreads();
 
         // direction 1
-        for (unsigned int j = threadIdx.y; j < nq1; j += blockDim.y)
+        for (unsigned int j = threadIdx.x; j < nq1; j += blockDim.x)
         {
-            for (unsigned int i = threadIdx.x; i < nq0; i += blockDim.x)
+            for (unsigned int i = threadIdx.y; i < nq0; i += blockDim.y)
             {
                 for (unsigned int r = threadIdx.z; r < nm2; r += blockDim.z)
                 {
@@ -341,11 +341,11 @@ __global__ void BwdTransHexKernel_QP(
         __syncthreads();
 
         // direction 2
-        for (unsigned int k = threadIdx.z; k < nq2; k += blockDim.z)
+        for (unsigned int k = threadIdx.x; k < nq2; k += blockDim.x)
         {
             for (unsigned int j = threadIdx.y; j < nq1; j += blockDim.y)
             {
-                for (unsigned int i = threadIdx.x; i < nq0; i += blockDim.x)
+                for (unsigned int i = threadIdx.z; i < nq0; i += blockDim.z)
                 {
                     unsigned int cnt_jir = nq0 * nm2 * j + nm2 * i;
                     unsigned int cnt_kji = nq0 * nq1 * k + nq0 * j + i;
@@ -389,8 +389,8 @@ void run_test(const unsigned int size, const unsigned int _nq0,
     {
         Kokkos::View<T *> d_in("d_in", nelmt * nm0 * nm1 * nm2);
         Kokkos::View<T *> d_out("d_out", nelmt * nq0 * nq1 * nq2);
-        Kokkos::View<T *> d_wsp1("d_wsp", nelmt * nq0 * nm1 * nm2);
-        Kokkos::View<T *> d_wsp2("d_wsp", nelmt * nq0 * nq1 * nm2);
+        Kokkos::View<T *> d_wsp1("d_wsp1", nelmt * nq0 * nm1 * nm2);
+        Kokkos::View<T *> d_wsp2("d_wsp2", nelmt * nq0 * nq1 * nm2);
         Kokkos::View<T *> d_basis0("d_basis0", nm0 * nq0);
         Kokkos::View<T *> d_basis1("d_basis1", nm1 * nq1);
         Kokkos::View<T *> d_basis2("d_basis2", nm2 * nq2);
