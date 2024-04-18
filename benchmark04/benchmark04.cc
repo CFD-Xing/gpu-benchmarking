@@ -567,8 +567,8 @@ void run_test(const unsigned int size, const unsigned int _nq0,
     std::vector<T> result_cuda3(1);
     std::vector<T> result_cuda4(1);
     {
-        const int threads = 256;
-        const int blocks  = 256;
+        const int threads = 128;
+        const int blocks  = 128;
         std::vector<T> h_in(nelmt * nm0 * nm1);
         std::vector<T> h_in_coa(nelmt * nm0 * nm1);
         std::vector<T> h_out(nelmt * nq0 * nq1);
@@ -619,12 +619,14 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                    cudaMemcpyHostToDevice);
 
         // Cuda 1 - Non coalesce
+        const unsigned int ssize1 = nm0 * nq0 + nm1 * nq1;
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransQuadKernel<T, false, false>
-                <<<blocks, threads>>>(nm0, nm1, nm0 * nm1, nq0, nq1, nelmt,
-                                      d_basis0, d_basis1, d_in, d_wsp0, d_out);
+            BwdTransQuadKernel<T, true, false>
+                <<<blocks, threads, sizeof(T) * ssize1>>>(
+                    nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1,
+                    d_in, d_wsp0, d_out);
             cudaDeviceSynchronize();
             time.stop();
             time_cuda1 = std::min(time_cuda1, time.elapsedSeconds());
@@ -635,12 +637,12 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             thrust::plus<T>());
 
         // Cuda 2 - Coalesce
-        const unsigned int ssize1 = nm0 * nq0 + nm1 * nq1;
+        const unsigned int ssize2 = nm0 * nq0 + nm1 * nq1;
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransQuadKernel<T, false, true>
-                <<<blocks, threads, sizeof(T) * ssize1>>>(
+            BwdTransQuadKernel<T, true, true>
+                <<<blocks, threads, sizeof(T) * ssize2>>>(
                     nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1,
                     d_in_coa, d_wsp0, d_out);
             cudaDeviceSynchronize();
