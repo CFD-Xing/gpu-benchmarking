@@ -12,8 +12,76 @@
 #include "../utils/cuda_vectors.h"
 #include "../utils/timer.h"
 
-template <typename T>
+template <typename T, bool shmem = false>
 __global__ void BwdTransQuadKernel(
+    const unsigned int nm0, const unsigned int nm1, const unsigned int nmTot,
+    const unsigned int nq0, const unsigned int nq1, const unsigned int nelmt,
+    T *__restrict__ basis0, T *__restrict__ basis1,
+    const T *__restrict__ in, T *__restrict__ wsp,
+    T *__restrict__ out)
+{
+    extern __shared__ T shared[];
+
+    T *s_basis0 = shmem ? shared : basis0;
+    T *s_basis1 = shmem ? s_basis0 + nm0 * nq0 : basis1;
+
+    // Copy to shared memory.
+    if constexpr (shmem)
+    {
+        unsigned int sIndex = threadIdx.x;
+        while (sIndex < nm0 * nq0)
+        {
+            s_basis0[sIndex] = basis0[sIndex];
+            sIndex += blockDim.x;
+        }
+
+        sIndex = threadIdx.x;
+        while (sIndex < nm1 * nq1)
+        {
+            s_basis1[sIndex] = basis1[sIndex];
+            sIndex += blockDim.x;
+        }
+    }
+
+    __syncthreads();
+
+    unsigned int e = blockDim.x * blockIdx.x + threadIdx.x;
+
+    while (e < nelmt)
+    {
+        const T *inptr = in + nmTot * e;
+        T *outptr      = out + nq0 * nq1 * e;
+        T *wsp0        = wsp + nm1 * e;
+
+        for (unsigned int i = 0; i < nq0; ++i)
+        {
+            for (unsigned int q = 0, cnt_qp = 0; q < nm1; ++q)
+            {
+                T tmp = 0.0;
+                for (unsigned int p = 0; p < nm0; ++p, ++cnt_qp)
+                {
+                    tmp += inptr[cnt_qp] * s_basis0[p * nq0 + i];
+                }
+                wsp0[q] = tmp;
+            }
+
+            for (unsigned int j = 0; j < nq1; ++j)
+            {
+                T tmp = 0.0;
+                for (unsigned int q = 0; q < nm1; ++q)
+                {
+                    tmp += wsp0[q] * s_basis1[q * nq1 + j];
+                }
+                outptr[nq0 * j + i] = tmp;
+            }
+        }
+
+        e += blockDim.x * gridDim.x;
+    }
+}
+
+template <typename T>
+__global__ void BwdTransQuadKernel_QP(
     const unsigned int nm0, const unsigned int nm1, const unsigned int nmTot,
     const unsigned int nq0, const unsigned int nq1, const unsigned int nelmt,
     const T *__restrict__ basis0, const T *__restrict__ basis1,
@@ -70,7 +138,7 @@ __global__ void BwdTransQuadKernel(
 }
 
 template <typename T>
-__global__ void BwdTransQuadKernel(
+__global__ void BwdTransQuadKernel_QP(
     const unsigned int nm0, const unsigned int nm1, const unsigned int nmTot,
     const unsigned int nq0, const unsigned int nq1, const unsigned int nelmt,
     const T *__restrict__ basis0, const T *__restrict__ basis1,
@@ -475,9 +543,14 @@ void run_test(const unsigned int size, const unsigned int _nq0,
     // CUDA kernels
     double time_cuda1 = std::numeric_limits<double>::max();
     double time_cuda2 = std::numeric_limits<double>::max();
+    double time_cuda3 = std::numeric_limits<double>::max();
+    double time_cuda4 = std::numeric_limits<double>::max();
     std::vector<T> result_cuda1(1);
     std::vector<T> result_cuda2(1);
+    std::vector<T> result_cuda3(1);
+    std::vector<T> result_cuda4(1);
     {
+        const int threads = 256;
         const int blocks = 256;
         std::vector<T> h_in(nelmt * nm0 * nm1);
         std::vector<T> h_out(nelmt * nq0 * nq1);
@@ -508,9 +581,10 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                 h_basis1[q * nq1 + j] = std::cos((T)(q * nq1 + j));
             }
         }
-        T *d_in, *d_wsp, *d_out, *d_basis0, *d_basis1;
+        T *d_in, *d_wsp, *d_wsp0, *d_out, *d_basis0, *d_basis1;
         cudaMalloc(&d_in, nelmt * nm0 * nm1 * sizeof(T));
         cudaMalloc(&d_wsp, nelmt * nq0 * nm1 * sizeof(T));
+        cudaMalloc(&d_wsp0, nelmt * nm1 * sizeof(T));
         cudaMalloc(&d_out, nelmt * nq0 * nq1 * sizeof(T));
         cudaMalloc(&d_basis0, nm0 * nq0 * sizeof(T));
         cudaMalloc(&d_basis1, nm1 * nq1 * sizeof(T));
@@ -525,10 +599,9 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransQuadKernel<<<blocks, dim3(std::min(nq0, 16u),
-                                              std::min(nq1, 16u))>>>(
+            BwdTransQuadKernel<T, false><<<blocks, threads>>>(
                 nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1, d_in,
-                d_wsp, d_out);
+                d_wsp0, d_out);
             cudaDeviceSynchronize();
             time.stop();
             time_cuda1 = std::min(time_cuda1, time.elapsedSeconds());
@@ -539,21 +612,55 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             thrust::plus<T>());
 
         // Cuda 2 - Shared memory
-        const unsigned int ssize =
-            nm0 * nq0 + nm1 * nq1 + nm0 * nm1 + nq0 * nm1;
+        const unsigned int ssize1 = nm0 * nq0 + nm1 * nq1;
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransQuadKernel<<<blocks,
-                                 dim3(std::min(nq0, 16u), std::min(nq1, 16u)),
-                                 sizeof(T) * ssize>>>(nm0, nm1, nm0 * nm1, nq0,
-                                                      nq1, nelmt, d_basis0,
-                                                      d_basis1, d_in, d_out);
+            BwdTransQuadKernel<T, true><<<blocks, threads, sizeof(T) * ssize1>>>(
+                nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1, d_in,
+                d_wsp0, d_out);
             cudaDeviceSynchronize();
             time.stop();
             time_cuda2 = std::min(time_cuda2, time.elapsedSeconds());
         }
         result_cuda2[0] = thrust::transform_reduce(
+            thrust::device, d_out, d_out + nelmt * nq0 * nq1,
+            [] __device__(const T &x) { return x * x; }, (T)0.0,
+            thrust::plus<T>());
+
+        // Cuda 3 - No shared memory
+        for (unsigned int t = 0u; t < n_tests; ++t)
+        {
+            time.start();
+            BwdTransQuadKernel_QP<<<blocks, dim3(std::min(nq0, 16u),
+                                              std::min(nq1, 16u))>>>(
+                nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1, d_in,
+                d_wsp, d_out);
+            cudaDeviceSynchronize();
+            time.stop();
+            time_cuda3 = std::min(time_cuda3, time.elapsedSeconds());
+        }
+        result_cuda3[0] = thrust::transform_reduce(
+            thrust::device, d_out, d_out + nelmt * nq0 * nq1,
+            [] __device__(const T &x) { return x * x; }, (T)0.0,
+            thrust::plus<T>());
+
+        // Cuda 4 - Shared memory
+        const unsigned int ssize4 =
+            nm0 * nq0 + nm1 * nq1 + nm0 * nm1 + nq0 * nm1;
+        for (unsigned int t = 0u; t < n_tests; ++t)
+        {
+            time.start();
+            BwdTransQuadKernel_QP<<<blocks,
+                                 dim3(std::min(nq0, 16u), std::min(nq1, 16u)),
+                                 sizeof(T) * ssize4>>>(nm0, nm1, nm0 * nm1, nq0,
+                                                      nq1, nelmt, d_basis0,
+                                                      d_basis1, d_in, d_out);
+            cudaDeviceSynchronize();
+            time.stop();
+            time_cuda4 = std::min(time_cuda4, time.elapsedSeconds());
+        }
+        result_cuda4[0] = thrust::transform_reduce(
             thrust::device, d_out, d_out + nelmt * nq0 * nq1,
             [] __device__(const T &x) { return x * x; }, (T)0.0,
             thrust::plus<T>());
@@ -566,14 +673,16 @@ void run_test(const unsigned int size, const unsigned int _nq0,
     // Display results
     std::cout << std::setprecision(10);
     std::cout << "nelmt " << nelmt
-              << "           Kokkos 1      Kokkos 2     cuBLAS        Cuda 1   "
-                 "   Cuda 2"
+              << "           Kokkos 1      Kokkos 2     cuBLAS          Cuda 1     "
+                 "   Cuda 2        Cuda 3        Cuda 4"
               << std::endl;
     std::cout << "nelmt " << nelmt << " norm: " << std::sqrt(result_kokkos1[0])
-              << "     " << std::sqrt(result_kokkos2[0]) << "     "
-              << "     " << std::sqrt(result_cublas[0]) << "     "
-              << "     " << std::sqrt(result_cuda1[0]) << "     "
-              << std::sqrt(result_cuda2[0]) << std::endl;
+              << "     " << std::sqrt(result_kokkos2[0]) 
+              << "     " << std::sqrt(result_cublas[0]) 
+              << "     " << std::sqrt(result_cuda1[0]) 
+              << "     " << std::sqrt(result_cuda2[0])
+              << "     " << std::sqrt(result_cuda3[0]) << "     "
+              << std::sqrt(result_cuda4[0]) << std::endl;
 
     std::cout
         << "nelmt " << nelmt << " GB/s: "
@@ -586,6 +695,10 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 + nq0 * nq1) / time_cuda1
         << "     "
         << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 + nq0 * nq1) / time_cuda2
+        << "     "
+        << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 + nq0 * nq1) / time_cuda3
+        << "     "
+        << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 + nq0 * nq1) / time_cuda4
         << std::endl;
 }
 
