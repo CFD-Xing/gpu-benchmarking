@@ -169,32 +169,33 @@ __global__ void BwdTransQuadKernel_QP(
 
     unsigned int e = blockIdx.x;
 
+    // Copy to shared memory.
+    for (unsigned int p = threadIdx.x; p < nm0; p += blockDim.x)
+    {
+        unsigned int cnt_pi = nq0 * p;
+
+        for (unsigned int i = threadIdx.y; i < nq0; i += blockDim.y)
+        {
+            s_basis0[cnt_pi + i] = basis0[cnt_pi + i];
+        }
+    }
+
+    for (unsigned int q = threadIdx.x; q < nm1; q += blockDim.x)
+    {
+        unsigned int cnt_qj = nq1 * q;
+
+        for (unsigned int j = threadIdx.y; j < nq1; j += blockDim.y)
+        {
+            s_basis1[cnt_qj + j] = basis1[cnt_qj + j];
+        }
+    }
+
     while (e < nelmt)
     {
         const T *inptr = in + nmTot * e;
         T *outptr      = out + nq0 * nq1 * e;
 
         // Copy to shared memory.
-        for (unsigned int p = threadIdx.x; p < nm0; p += blockDim.x)
-        {
-            unsigned int cnt_pi = nq0 * p;
-
-            for (unsigned int i = threadIdx.y; i < nq0; i += blockDim.y)
-            {
-                s_basis0[cnt_pi + i] = basis0[cnt_pi + i];
-            }
-        }
-
-        for (unsigned int q = threadIdx.x; q < nm1; q += blockDim.x)
-        {
-            unsigned int cnt_qj = nq1 * q;
-
-            for (unsigned int j = threadIdx.y; j < nq1; j += blockDim.y)
-            {
-                s_basis1[cnt_qj + j] = basis1[cnt_qj + j];
-            }
-        }
-
         for (unsigned int q = threadIdx.x; q < nm1; q += blockDim.x)
         {
             unsigned int cnt_qp = nm0 * q;
@@ -569,7 +570,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
     std::vector<T> result_cuda4(1);
     {
         const int threads = 128;
-        const int blocks  = 128;
+        const int blocks  = nelmt / 32;
         std::vector<T> h_in(nelmt * nm0 * nm1);
         std::vector<T> h_in_coa(nelmt * nm0 * nm1);
         std::vector<T> h_out(nelmt * nq0 * nq1);
