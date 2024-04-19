@@ -271,11 +271,11 @@ __global__ void BwdTransHexKernel_QP(
             }
         }
 
-        for (unsigned int r = threadIdx.x; r < nm1; r += blockDim.x)
+        for (unsigned int r = threadIdx.x; r < nm2; r += blockDim.x)
         {
             unsigned int cnt_rk = nq2 * r;
 
-            for (unsigned int k = threadIdx.y; k < nq1; k += blockDim.y)
+            for (unsigned int k = threadIdx.y; k < nq2; k += blockDim.y)
             {
                 s_basis2[cnt_rk + k] = basis2[cnt_rk + k];
             }
@@ -367,6 +367,212 @@ __global__ void BwdTransHexKernel_QP(
 }
 
 template <typename T>
+__global__ void BwdTransHexKernel_QP_1D(
+    const unsigned int nm0, const unsigned int nm1, const unsigned int nm2,
+    const unsigned int nmTot, const unsigned int nq0, const unsigned int nq1,
+    const unsigned int nq2, const unsigned int nelmt,
+    const T *__restrict__ basis0, const T *__restrict__ basis1,
+    const T *__restrict__ basis2, const T *__restrict__ in,
+    T *__restrict__ wsp1, T *__restrict__ wsp2, T *__restrict__ out)
+{
+    unsigned int e = blockIdx.x;
+
+    while (e < nelmt)
+    {
+        const T *inptr = in + nmTot * e;
+        T *wspptr1     = wsp1 + nq0 * nm1 * nm2 * e;
+        T *wspptr2     = wsp2 + nq0 * nq1 * nm2 * e;
+        T *outptr      = out + nq0 * nq1 * nq2 * e;
+
+        // direction 0
+        for (unsigned int tid = threadIdx.x; tid < nq0 * nm1 * nm2;
+             tid += blockDim.x)
+        {
+            unsigned int q       = tid % nm1;
+            unsigned int r       = (tid / nm1) % nm2;
+            unsigned int i       = tid / (nm1 * nm2);
+            unsigned int cnt_rqp = nm1 * nm0 * r + nm0 * q;
+            unsigned int cnt_irq = nm1 * nm2 * i + nm1 * r + q;
+
+            T tmp = 0.0;
+            for (unsigned int p = 0; p < nm0; ++p, ++cnt_rqp)
+            {
+                tmp += inptr[cnt_rqp] * basis0[p * nq0 + i];
+            }
+            wspptr1[cnt_irq] = tmp;
+        }
+
+        __syncthreads();
+
+        // direction 1
+        for (unsigned int tid = threadIdx.x; tid < nq0 * nq1 * nm2;
+             tid += blockDim.x)
+        {
+            unsigned int r       = tid % nm2;
+            unsigned int i       = (tid / nm2) % nq0;
+            unsigned int j       = tid / (nm2 * nq0);
+            unsigned int cnt_irq = nm1 * nm2 * i + nm1 * r;
+            unsigned int cnt_jir = nq0 * nm2 * j + nm2 * i + r;
+
+            T tmp = 0.0;
+            for (unsigned int q = 0; q < nm1; ++q, ++cnt_irq)
+            {
+                tmp += wspptr1[cnt_irq] * basis1[q * nq1 + j];
+            }
+            wspptr2[cnt_jir] = tmp;
+        }
+
+        __syncthreads();
+
+        // direction 2
+        for (unsigned int tid = threadIdx.x; tid < nq0 * nq1 * nq2;
+             tid += blockDim.x)
+        {
+            unsigned int i       = tid % nq0;
+            unsigned int j       = (tid / nq0) % nq1;
+            unsigned int k       = tid / (nq1 * nq0);
+            unsigned int cnt_jir = nq0 * nm2 * j + nm2 * i;
+            unsigned int cnt_kji = nq0 * nq1 * k + nq0 * j + i;
+
+            T tmp = 0.0;
+            for (unsigned int r = 0; r < nm2; ++r, ++cnt_jir)
+            {
+                tmp += wspptr2[cnt_jir] * basis2[r * nq2 + k];
+            }
+            outptr[cnt_kji] = tmp;
+        }
+
+        __syncthreads();
+
+        e += gridDim.x;
+    }
+}
+
+template <typename T>
+__global__ void BwdTransHexKernel_QP_1D(
+    const unsigned int nm0, const unsigned int nm1, const unsigned int nm2,
+    const unsigned int nmTot, const unsigned int nq0, const unsigned int nq1,
+    const unsigned int nq2, const unsigned int nelmt,
+    const T *__restrict__ basis0, const T *__restrict__ basis1,
+    const T *__restrict__ basis2, const T *__restrict__ in, T *__restrict__ out)
+{
+    extern __shared__ T shared[];
+    T *s_basis0 = shared;
+    T *s_basis1 = s_basis0 + nm0 * nq0;
+    T *s_basis2 = s_basis1 + nm1 * nq1;
+    T *s_wsp0   = s_basis2 + nm2 * nq2;
+    T *s_wsp1   = s_wsp0 + nmTot;
+    T *s_wsp2   = s_wsp1 + (nq0 * nm1 * nm2);
+
+    unsigned int e = blockIdx.x;
+
+    while (e < nelmt)
+    {
+        const T *inptr = in + nmTot * e;
+        T *outptr      = out + nq0 * nq1 * nq2 * e;
+
+        // Copy to shared memory.
+        for (unsigned int tid = threadIdx.x; tid < nq0 * nm0; tid += blockDim.x)
+        {
+            unsigned int i       = tid % nq0;
+            unsigned int p       = tid / nq0;
+            unsigned int cnt_pi  = nq0 * p;
+            s_basis0[cnt_pi + i] = basis0[cnt_pi + i];
+        }
+
+        for (unsigned int tid = threadIdx.x; tid < nq1 * nm1; tid += blockDim.x)
+        {
+            unsigned int j       = tid % nq1;
+            unsigned int q       = tid / nq1;
+            unsigned int cnt_qj  = nq1 * q;
+            s_basis1[cnt_qj + j] = basis1[cnt_qj + j];
+        }
+
+        for (unsigned int tid = threadIdx.x; tid < nq2 * nm2; tid += blockDim.x)
+        {
+            unsigned int k       = tid % nq2;
+            unsigned int r       = tid / nq2;
+            unsigned int cnt_rk  = nq2 * r;
+            s_basis2[cnt_rk + k] = basis2[cnt_rk + k];
+        }
+
+        for (unsigned int tid = threadIdx.x; tid < nm0 * nm1 * nm2;
+             tid += blockDim.x)
+        {
+            unsigned int p       = tid % nm0;
+            unsigned int q       = (tid / nm0) % nm1;
+            unsigned int r       = tid / (nm0 * nm1);
+            unsigned int cnt_rqp = nm1 * nm0 * r + nm0 * q;
+            s_wsp0[cnt_rqp + p]  = inptr[cnt_rqp + p];
+        }
+
+        __syncthreads();
+
+        // direction 0
+        for (unsigned int tid = threadIdx.x; tid < nq0 * nm1 * nm2;
+             tid += blockDim.x)
+        {
+            unsigned int q       = tid % nm1;
+            unsigned int r       = (tid / nm1) % nm2;
+            unsigned int i       = tid / (nm1 * nm2);
+            unsigned int cnt_rqp = nm1 * nm0 * r + nm0 * q;
+            unsigned int cnt_irq = nm1 * nm2 * i + nm1 * r + q;
+
+            T tmp = 0.0;
+            for (unsigned int p = 0; p < nm0; ++p, ++cnt_rqp)
+            {
+                tmp += s_wsp0[cnt_rqp] * s_basis0[p * nq0 + i];
+            }
+            s_wsp1[cnt_irq] = tmp;
+        }
+
+        __syncthreads();
+
+        // direction 1
+        for (unsigned int tid = threadIdx.x; tid < nq0 * nq1 * nm2;
+             tid += blockDim.x)
+        {
+            unsigned int r       = tid % nm2;
+            unsigned int i       = (tid / nm2) % nq0;
+            unsigned int j       = tid / (nm2 * nq0);
+            unsigned int cnt_irq = nm1 * nm2 * i + nm1 * r;
+            unsigned int cnt_jir = nq0 * nm2 * j + nm2 * i + r;
+
+            T tmp = 0.0;
+            for (unsigned int q = 0; q < nm1; ++q, ++cnt_irq)
+            {
+                tmp += s_wsp1[cnt_irq] * s_basis1[q * nq1 + j];
+            }
+            s_wsp2[cnt_jir] = tmp;
+        }
+
+        __syncthreads();
+
+        // direction 2
+        for (unsigned int tid = threadIdx.x; tid < nq0 * nq1 * nq2;
+             tid += blockDim.x)
+        {
+            unsigned int i       = tid % nq0;
+            unsigned int j       = (tid / nq0) % nq1;
+            unsigned int k       = tid / (nq1 * nq0);
+            unsigned int cnt_jir = nq0 * nm2 * j + nm2 * i;
+            unsigned int cnt_kji = nq0 * nq1 * k + nq0 * j + i;
+
+            T tmp = 0.0;
+            for (unsigned int r = 0; r < nm2; ++r, ++cnt_jir)
+            {
+                tmp += s_wsp2[cnt_jir] * s_basis2[r * nq2 + k];
+            }
+            outptr[cnt_kji] = tmp;
+        }
+
+        __syncthreads();
+
+        e += gridDim.x;
+    }
+}
+
+template <typename T>
 void run_test(const unsigned int size, const unsigned int _nq0,
               const unsigned int _nq1, const unsigned int _nq2)
 {
@@ -436,11 +642,17 @@ void run_test(const unsigned int size, const unsigned int _nq0,
 
                     // direction 0
                     Kokkos::parallel_for(
-                        Kokkos::TeamThreadMDRange<Kokkos::Rank<3>, team_handle>(
-                            team, nq0, nm2, nm1),
-                        [&](const unsigned int &i, const unsigned int &r,
-                            const unsigned &q)
+                        //Kokkos::TeamThreadMDRange<Kokkos::Rank<3>,
+                        //team_handle>(
+                        //    team, nq0, nm2, nm1),
+                        //[&](const unsigned int &i, const unsigned int &r,
+                        //     const unsigned &q)
+                        Kokkos::TeamThreadRange(team, nq0 * nm2 * nm1),
+                        [&](const unsigned int &tid)
                         {
+                            unsigned int q       = tid % nm1;
+                            unsigned int r       = (tid / nm1) % nm2;
+                            unsigned int i       = tid / (nm1 * nm2);
                             unsigned int cnt_rqp = nm1 * nm0 * r + nm0 * q;
                             unsigned int cnt_irq = nm1 * nm2 * i + nm1 * r + q;
 
@@ -457,11 +669,17 @@ void run_test(const unsigned int size, const unsigned int _nq0,
 
                     // direction 1
                     Kokkos::parallel_for(
-                        Kokkos::TeamThreadMDRange<Kokkos::Rank<3>, team_handle>(
-                            team, nq1, nq0, nm2),
-                        [&](const unsigned int &j, const unsigned int &i,
-                            const unsigned int &r)
+                        // Kokkos::TeamThreadMDRange<Kokkos::Rank<3>,
+                        // team_handle>(
+                        //     team, nq1, nq0, nm2),
+                        //[&](const unsigned int &j, const unsigned int &i,
+                        //     const unsigned int &r)
+                        Kokkos::TeamThreadRange(team, nq1 * nq0 * nm2),
+                        [&](const unsigned int &tid)
                         {
+                            unsigned int r       = tid % nm2;
+                            unsigned int i       = (tid / nm2) % nq0;
+                            unsigned int j       = tid / (nm2 * nq0);
                             unsigned int cnt_irq = nm1 * nm2 * i + nm1 * r;
                             unsigned int cnt_jir = nq0 * nm2 * j + nm2 * i + r;
 
@@ -477,12 +695,19 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                     team.team_barrier();
 
                     // direction 2
+                    // Kokkos::parallel_for(
+                    //    Kokkos::TeamThreadMDRange<Kokkos::Rank<3>,
+                    //    team_handle>(
+                    //        team, nq2, nq1, nq0),
+                    //    [&](const unsigned int &k, const unsigned int &j,
+                    //        const unsigned int &i)
                     Kokkos::parallel_for(
-                        Kokkos::TeamThreadMDRange<Kokkos::Rank<3>, team_handle>(
-                            team, nq2, nq1, nq0),
-                        [&](const unsigned int &k, const unsigned int &j,
-                            const unsigned int &i)
+                        Kokkos::TeamThreadRange(team, nq2 * nq1 * nq0),
+                        [&](const unsigned int &tid)
                         {
+                            unsigned int i       = tid % nq0;
+                            unsigned int j       = (tid / nq0) % nq1;
+                            unsigned int k       = tid / (nq1 * nq0);
                             unsigned int cnt_jir = nq0 * nm2 * j + nm2 * i;
                             unsigned int cnt_kji = nq0 * nq1 * k + nq0 * j + i;
 
@@ -562,44 +787,87 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                                           ssize));
 
                     // copy to shared memory
+                    // Kokkos::parallel_for(
+                    //    Kokkos::TeamThreadMDRange<Kokkos::Rank<2>,
+                    //    team_handle>(
+                    //        team, nm0, nq0),
+                    //    [&](const unsigned int &p, const unsigned int &i)
+                    //    { s_basis0(p * nq0 + i) = d_basis0(p * nq0 + i); });
                     Kokkos::parallel_for(
-                        Kokkos::TeamThreadMDRange<Kokkos::Rank<2>, team_handle>(
-                            team, nm0, nq0),
-                        [&](const unsigned int &p, const unsigned int &i)
-                        { s_basis0(p * nq0 + i) = d_basis0(p * nq0 + i); });
-
-                    Kokkos::parallel_for(
-                        Kokkos::TeamThreadMDRange<Kokkos::Rank<2>, team_handle>(
-                            team, nm1, nq1),
-                        [&](const unsigned int &q, const unsigned int &j)
-                        { s_basis1(q * nq1 + j) = d_basis1(q * nq1 + j); });
-
-                    Kokkos::parallel_for(
-                        Kokkos::TeamThreadMDRange<Kokkos::Rank<2>, team_handle>(
-                            team, nm2, nq2),
-                        [&](const unsigned int &r, const unsigned int &k)
-                        { s_basis2(r * nq2 + k) = d_basis2(r * nq2 + k); });
-
-                    Kokkos::parallel_for(
-                        Kokkos::TeamThreadMDRange<Kokkos::Rank<3>, team_handle>(
-                            team, nm2, nm1, nm0),
-                        [&](const unsigned int &r, const unsigned int &q,
-                            const unsigned int &p)
+                        Kokkos::TeamThreadRange(team, nm0 * nq0),
+                        [&](const unsigned int tid)
                         {
-                            s_wsp0(nm1 * nm0 * r + nm0 * q + p) =
-                                d_in(nm0 * nm1 * nm2 * e + nm1 * nm0 * r +
-                                     nm0 * q + p);
+                            unsigned int i      = tid % nq0;
+                            unsigned int p      = tid / nq0;
+                            unsigned int cnt_pi = nq0 * p + i;
+                            s_basis0(cnt_pi)    = d_basis0(cnt_pi);
+                        });
+
+                    // Kokkos::parallel_for(
+                    //     Kokkos::TeamThreadMDRange<Kokkos::Rank<2>,
+                    //     team_handle>(
+                    //         team, nm1, nq1),
+                    //     [&](const unsigned int &q, const unsigned int &j)
+                    //     { s_basis1(q * nq1 + j) = d_basis1(q * nq1 + j); });
+                    Kokkos::parallel_for(
+                        Kokkos::TeamThreadRange(team, nm1 * nq1),
+                        [&](const unsigned int tid)
+                        {
+                            unsigned int j      = tid % nq1;
+                            unsigned int q      = tid / nq1;
+                            unsigned int cnt_qj = nq1 * q + j;
+                            s_basis1(cnt_qj)    = d_basis1(cnt_qj);
+                        });
+
+                    // Kokkos::parallel_for(
+                    //     Kokkos::TeamThreadMDRange<Kokkos::Rank<2>,
+                    //     team_handle>(
+                    //         team, nm2, nq2),
+                    //     [&](const unsigned int &r, const unsigned int &k)
+                    //     { s_basis2(r * nq2 + k) = d_basis2(r * nq2 + k); });
+                    Kokkos::parallel_for(
+                        Kokkos::TeamThreadRange(team, nm2 * nq2),
+                        [&](const unsigned int tid)
+                        {
+                            unsigned int k      = tid % nq2;
+                            unsigned int r      = tid / nq2;
+                            unsigned int cnt_rk = nq2 * r + k;
+                            s_basis2(cnt_rk)    = d_basis2(cnt_rk);
+                        });
+
+                    // Kokkos::parallel_for(
+                    //     Kokkos::TeamThreadMDRange<Kokkos::Rank<3>,
+                    //     team_handle>(
+                    //         team, nm2, nm1, nm0),
+                    //     [&](const unsigned int &r, const unsigned int &q,
+                    //         const unsigned int &p)
+                    Kokkos::parallel_for(
+                        Kokkos::TeamThreadRange(team, nm2 * nm1 * nm0),
+                        [&](const unsigned int &tid)
+                        {
+                            unsigned int p       = tid % nm0;
+                            unsigned int q       = (tid / nm0) % nm1;
+                            unsigned int r       = tid / (nm0 * nm1);
+                            unsigned int cnt_rqp = nm1 * nm0 * r + nm0 * q + p;
+                            s_wsp0(cnt_rqp) =
+                                d_in(nm0 * nm1 * nm2 * e + cnt_rqp);
                         });
 
                     team.team_barrier();
 
                     // direction 0
                     Kokkos::parallel_for(
-                        Kokkos::TeamThreadMDRange<Kokkos::Rank<3>, team_handle>(
-                            team, nq0, nm2, nm1),
-                        [&](const unsigned int &i, const unsigned int &r,
-                            const unsigned &q)
+                        // Kokkos::TeamThreadMDRange<Kokkos::Rank<3>,
+                        // team_handle>(
+                        //     team, nq0, nm2, nm1),
+                        //[&](const unsigned int &i, const unsigned int &r,
+                        //     const unsigned &q)
+                        Kokkos::TeamThreadRange(team, nq0 * nm2 * nm1),
+                        [&](const unsigned int &tid)
                         {
+                            unsigned int q       = tid % nm1;
+                            unsigned int r       = (tid / nm1) % nm2;
+                            unsigned int i       = tid / (nm1 * nm2);
                             unsigned int cnt_rqp = nm1 * nm0 * r + nm0 * q;
                             unsigned int cnt_irq = nm1 * nm2 * i + nm1 * r + q;
 
@@ -615,11 +883,17 @@ void run_test(const unsigned int size, const unsigned int _nq0,
 
                     // direction 1
                     Kokkos::parallel_for(
-                        Kokkos::TeamThreadMDRange<Kokkos::Rank<3>, team_handle>(
-                            team, nq1, nq0, nm2),
-                        [&](const unsigned int &j, const unsigned int &i,
-                            const unsigned int &r)
+                        // Kokkos::TeamThreadMDRange<Kokkos::Rank<3>,
+                        // team_handle>(
+                        //     team, nq1, nq0, nm2),
+                        //[&](const unsigned int &j, const unsigned int &i,
+                        //     const unsigned int &r)
+                        Kokkos::TeamThreadRange(team, nq1 * nq0 * nm2),
+                        [&](const unsigned int &tid)
                         {
+                            unsigned int r       = tid % nm2;
+                            unsigned int i       = (tid / nm2) % nq0;
+                            unsigned int j       = tid / (nm2 * nq0);
                             unsigned int cnt_irq = nm1 * nm2 * i + nm1 * r;
                             unsigned int cnt_jir = nq0 * nm2 * j + nm2 * i + r;
 
@@ -634,12 +908,19 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                     team.team_barrier();
 
                     // direction 2
+                    // Kokkos::parallel_for(
+                    //    Kokkos::TeamThreadMDRange<Kokkos::Rank<3>,
+                    //    team_handle>(
+                    //        team, nq2, nq1, nq0),
+                    //    [&](const unsigned int &k, const unsigned int &j,
+                    //        const unsigned int &i)
                     Kokkos::parallel_for(
-                        Kokkos::TeamThreadMDRange<Kokkos::Rank<3>, team_handle>(
-                            team, nq2, nq1, nq0),
-                        [&](const unsigned int &k, const unsigned int &j,
-                            const unsigned int &i)
+                        Kokkos::TeamThreadRange(team, nq2 * nq1 * nq0),
+                        [&](const unsigned int &tid)
                         {
+                            unsigned int i       = tid % nq0;
+                            unsigned int j       = (tid / nq0) % nq1;
+                            unsigned int k       = tid / (nq1 * nq0);
                             unsigned int cnt_jir = nq0 * nm2 * j + nm2 * i;
                             unsigned int cnt_kji = nq0 * nq1 * k + nq0 * j + i;
 
@@ -782,13 +1063,17 @@ void run_test(const unsigned int size, const unsigned int _nq0,
     double time_cuda2 = std::numeric_limits<double>::max();
     double time_cuda3 = std::numeric_limits<double>::max();
     double time_cuda4 = std::numeric_limits<double>::max();
+    double time_cuda5 = std::numeric_limits<double>::max();
+    double time_cuda6 = std::numeric_limits<double>::max();
     std::vector<T> result_cuda1(1);
     std::vector<T> result_cuda2(1);
     std::vector<T> result_cuda3(1);
     std::vector<T> result_cuda4(1);
+    std::vector<T> result_cuda5(1);
+    std::vector<T> result_cuda6(1);
     {
-        const int threads = 128;
-        const int blocks  = 128;
+        const unsigned int threads = 256;
+        const unsigned int blocks  = nelmt / 4;
         std::vector<T> h_in(nelmt * nm0 * nm1 * nm2);
         std::vector<T> h_in_coa(nelmt * nm0 * nm1 * nm2);
         std::vector<T> h_out(nelmt * nq0 * nq1 * nq2);
@@ -838,8 +1123,8 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         cudaMalloc(&d_in_coa, nelmt * nm0 * nm1 * nm2 * sizeof(T));
         cudaMalloc(&d_wsp0, nelmt * nm1 * nm2 * sizeof(T));
         cudaMalloc(&d_wsp1, nelmt * nm2 * sizeof(T));
-        cudaMalloc(&d_wsp2, nelmt * nm0 * nm1 * nq2 * sizeof(T));
-        cudaMalloc(&d_wsp3, nelmt * nm0 * nq1 * nq2 * sizeof(T));
+        cudaMalloc(&d_wsp2, nelmt * nq0 * nm1 * nm2 * sizeof(T));
+        cudaMalloc(&d_wsp3, nelmt * nq0 * nq1 * nm2 * sizeof(T));
         cudaMalloc(&d_out, nelmt * nq0 * nq1 * nq2 * sizeof(T));
         cudaMalloc(&d_basis0, nm0 * nq0 * sizeof(T));
         cudaMalloc(&d_basis1, nm1 * nq1 * sizeof(T));
@@ -897,8 +1182,8 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         {
             time.start();
             BwdTransHexKernel_QP<<<blocks,
-                                   dim3(std::min(nq0, 8u), std::min(nq1, 8u),
-                                        std::min(nq2, 8u))>>>(
+                                   dim3(nq0, nq1,
+                                        std::min(nq2, 1024u/(nq0 * nq1)))>>>(
                 nm0, nm1, nm2, nm0 * nm1 * nm2, nq0, nq1, nq2, nelmt, d_basis0,
                 d_basis1, d_basis2, d_in, d_wsp2, d_wsp3, d_out);
             cudaDeviceSynchronize();
@@ -918,8 +1203,8 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         {
             time.start();
             BwdTransHexKernel_QP<<<blocks,
-                                   dim3(std::min(nq0, 8u), std::min(nq1, 8u),
-                                        std::min(nq2, 8u)),
+                                   dim3(nq0, nq1,
+                                        std::min(nq2, 1024u/ (nq0 * nq1))),
                                    sizeof(T) * ssize4>>>(
                 nm0, nm1, nm2, nm0 * nm1 * nm2, nq0, nq1, nq2, nelmt, d_basis0,
                 d_basis1, d_basis2, d_in, d_out);
@@ -928,6 +1213,41 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             time_cuda4 = std::min(time_cuda4, time.elapsedSeconds());
         }
         result_cuda4[0] = thrust::transform_reduce(
+            thrust::device, d_out, d_out + nelmt * nq0 * nq1 * nq2,
+            [] __device__(const T &x) { return x * x; }, (T)0.0,
+            thrust::plus<T>());
+
+        // Cuda 5 - No shared memory
+        for (unsigned int t = 0u; t < n_tests; ++t)
+        {
+            time.start();
+            BwdTransHexKernel_QP_1D<<<blocks, std::min(nq0*nq1*nq2,threads)>>>(
+                nm0, nm1, nm2, nm0 * nm1 * nm2, nq0, nq1, nq2, nelmt, d_basis0,
+                d_basis1, d_basis2, d_in, d_wsp2, d_wsp3, d_out);
+            cudaDeviceSynchronize();
+            time.stop();
+            time_cuda5 = std::min(time_cuda5, time.elapsedSeconds());
+        }
+        result_cuda5[0] = thrust::transform_reduce(
+            thrust::device, d_out, d_out + nelmt * nq0 * nq1 * nq2,
+            [] __device__(const T &x) { return x * x; }, (T)0.0,
+            thrust::plus<T>());
+
+        // Cuda 6 - Shared memory
+        const unsigned int ssize6 = nm0 * nq0 + nm1 * nq1 + nm2 * nq2 +
+                                    nm0 * nm1 * nm2 + nm0 * nm1 * nq2 +
+                                    nm0 * nq1 * nq2;
+        for (unsigned int t = 0u; t < n_tests; ++t)
+        {
+            time.start();
+            BwdTransHexKernel_QP_1D<<<blocks, std::min(nq0*nq1*nq2,threads), sizeof(T) * ssize6>>>(
+                nm0, nm1, nm2, nm0 * nm1 * nm2, nq0, nq1, nq2, nelmt, d_basis0,
+                d_basis1, d_basis2, d_in, d_out);
+            cudaDeviceSynchronize();
+            time.stop();
+            time_cuda6 = std::min(time_cuda6, time.elapsedSeconds());
+        }
+        result_cuda6[0] = thrust::transform_reduce(
             thrust::device, d_out, d_out + nelmt * nq0 * nq1 * nq2,
             [] __device__(const T &x) { return x * x; }, (T)0.0,
             thrust::plus<T>());
@@ -948,7 +1268,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
     std::cout
         << "nelmt " << nelmt
         << "           Kokkos 1      Kokkos 2     cuBLAS          Cuda 1     "
-           "   Cuda 2        Cuda 3        Cuda 4"
+           "   Cuda 2        Cuda 3        Cuda 4        Cuda 5        Cuda 6"
         << std::endl;
     std::cout << "nelmt " << nelmt << " norm: " << std::sqrt(result_kokkos1[0])
               << "     " << std::sqrt(result_kokkos2[0]) << "     "
@@ -956,7 +1276,9 @@ void run_test(const unsigned int size, const unsigned int _nq0,
               << std::sqrt(result_cuda1[0]) << "     "
               << std::sqrt(result_cuda2[0]) << "     "
               << std::sqrt(result_cuda3[0]) << "     "
-              << std::sqrt(result_cuda4[0]) << std::endl;
+              << std::sqrt(result_cuda4[0]) << "     "
+              << std::sqrt(result_cuda5[0]) << "     "
+              << std::sqrt(result_cuda6[0]) << std::endl;
 
     std::cout << "nelmt " << nelmt << " GB/s: "
               << sizeof(T) * 1.0e-9 * nelmt *
@@ -979,6 +1301,12 @@ void run_test(const unsigned int size, const unsigned int _nq0,
               << "     "
               << sizeof(T) * 1.0e-9 * nelmt *
                      (nm0 * nm1 * nm2 + nq0 * nq1 * nq2) / time_cuda4
+              << "     "
+              << sizeof(T) * 1.0e-9 * nelmt *
+                     (nm0 * nm1 * nm2 + nq0 * nq1 * nq2) / time_cuda5
+              << "     "
+              << sizeof(T) * 1.0e-9 * nelmt *
+                     (nm0 * nm1 * nm2 + nq0 * nq1 * nq2) / time_cuda6
               << std::endl;
 }
 
