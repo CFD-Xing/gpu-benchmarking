@@ -245,42 +245,43 @@ __global__ void BwdTransHexKernel_QP(
 
     unsigned int e = blockIdx.x;
 
+    // Copy to shared memory.
+    for (unsigned int p = threadIdx.x; p < nm0; p += blockDim.x)
+    {
+        unsigned int cnt_pi = nq0 * p;
+
+        for (unsigned int i = threadIdx.y; i < nq0; i += blockDim.y)
+        {
+            s_basis0[cnt_pi + i] = basis0[cnt_pi + i];
+        }
+    }
+
+    for (unsigned int q = threadIdx.x; q < nm1; q += blockDim.x)
+    {
+        unsigned int cnt_qj = nq1 * q;
+
+        for (unsigned int j = threadIdx.y; j < nq1; j += blockDim.y)
+        {
+            s_basis1[cnt_qj + j] = basis1[cnt_qj + j];
+        }
+    }
+
+    for (unsigned int r = threadIdx.x; r < nm2; r += blockDim.x)
+    {
+        unsigned int cnt_rk = nq2 * r;
+
+        for (unsigned int k = threadIdx.y; k < nq2; k += blockDim.y)
+        {
+            s_basis2[cnt_rk + k] = basis2[cnt_rk + k];
+        }
+    }
+
     while (e < nelmt)
     {
         const T *inptr = in + nmTot * e;
         T *outptr      = out + nq0 * nq1 * nq2 * e;
 
         // Copy to shared memory.
-        for (unsigned int p = threadIdx.x; p < nm0; p += blockDim.x)
-        {
-            unsigned int cnt_pi = nq0 * p;
-
-            for (unsigned int i = threadIdx.y; i < nq0; i += blockDim.y)
-            {
-                s_basis0[cnt_pi + i] = basis0[cnt_pi + i];
-            }
-        }
-
-        for (unsigned int q = threadIdx.x; q < nm1; q += blockDim.x)
-        {
-            unsigned int cnt_qj = nq1 * q;
-
-            for (unsigned int j = threadIdx.y; j < nq1; j += blockDim.y)
-            {
-                s_basis1[cnt_qj + j] = basis1[cnt_qj + j];
-            }
-        }
-
-        for (unsigned int r = threadIdx.x; r < nm2; r += blockDim.x)
-        {
-            unsigned int cnt_rk = nq2 * r;
-
-            for (unsigned int k = threadIdx.y; k < nq2; k += blockDim.y)
-            {
-                s_basis2[cnt_rk + k] = basis2[cnt_rk + k];
-            }
-        }
-
         for (unsigned int r = threadIdx.x; r < nm2; r += blockDim.x)
         {
             for (unsigned int q = threadIdx.y; q < nm1; q += blockDim.y)
@@ -466,36 +467,37 @@ __global__ void BwdTransHexKernel_QP_1D(
 
     unsigned int e = blockIdx.x;
 
+    // Copy to shared memory.
+    for (unsigned int tid = threadIdx.x; tid < nq0 * nm0; tid += blockDim.x)
+    {
+        unsigned int i       = tid % nq0;
+        unsigned int p       = tid / nq0;
+        unsigned int cnt_pi  = nq0 * p;
+        s_basis0[cnt_pi + i] = basis0[cnt_pi + i];
+    }
+
+    for (unsigned int tid = threadIdx.x; tid < nq1 * nm1; tid += blockDim.x)
+    {
+        unsigned int j       = tid % nq1;
+        unsigned int q       = tid / nq1;
+        unsigned int cnt_qj  = nq1 * q;
+        s_basis1[cnt_qj + j] = basis1[cnt_qj + j];
+    }
+
+    for (unsigned int tid = threadIdx.x; tid < nq2 * nm2; tid += blockDim.x)
+    {
+        unsigned int k       = tid % nq2;
+        unsigned int r       = tid / nq2;
+        unsigned int cnt_rk  = nq2 * r;
+        s_basis2[cnt_rk + k] = basis2[cnt_rk + k];
+    }
+
     while (e < nelmt)
     {
         const T *inptr = in + nmTot * e;
         T *outptr      = out + nq0 * nq1 * nq2 * e;
 
         // Copy to shared memory.
-        for (unsigned int tid = threadIdx.x; tid < nq0 * nm0; tid += blockDim.x)
-        {
-            unsigned int i       = tid % nq0;
-            unsigned int p       = tid / nq0;
-            unsigned int cnt_pi  = nq0 * p;
-            s_basis0[cnt_pi + i] = basis0[cnt_pi + i];
-        }
-
-        for (unsigned int tid = threadIdx.x; tid < nq1 * nm1; tid += blockDim.x)
-        {
-            unsigned int j       = tid % nq1;
-            unsigned int q       = tid / nq1;
-            unsigned int cnt_qj  = nq1 * q;
-            s_basis1[cnt_qj + j] = basis1[cnt_qj + j];
-        }
-
-        for (unsigned int tid = threadIdx.x; tid < nq2 * nm2; tid += blockDim.x)
-        {
-            unsigned int k       = tid % nq2;
-            unsigned int r       = tid / nq2;
-            unsigned int cnt_rk  = nq2 * r;
-            s_basis2[cnt_rk + k] = basis2[cnt_rk + k];
-        }
-
         for (unsigned int tid = threadIdx.x; tid < nm0 * nm1 * nm2;
              tid += blockDim.x)
         {
@@ -634,8 +636,8 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            Kokkos::parallel_for("Kokkos 1",
-                Kokkos::TeamPolicy<>(nelmt, Kokkos::AUTO),
+            Kokkos::parallel_for(
+                "Kokkos 1", Kokkos::TeamPolicy<>(nelmt, Kokkos::AUTO),
                 KOKKOS_LAMBDA(const team_handle &team) {
                     // element index
                     unsigned int e = team.league_rank();
@@ -731,7 +733,8 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                 T *, Kokkos::DefaultExecutionSpace::scratch_memory_space,
                 Kokkos::MemoryTraits<Kokkos::Unmanaged>>::shmem_size(ssize);
 
-            Kokkos::parallel_for("Kokkos 2",
+            Kokkos::parallel_for(
+                "Kokkos 2",
                 Kokkos::TeamPolicy<>(nelmt, Kokkos::AUTO)
                     .set_scratch_size(slevel, Kokkos::PerTeam(shmem_size)),
                 KOKKOS_LAMBDA(const team_handle &team) {
