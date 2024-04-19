@@ -1089,9 +1089,10 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         {
             time.start();
             BwdTransHexKernel<T, true, false>
-                <<<blocks, threads, sizeof(T) * ssize1>>>(
-                    nm0, nm1, nm2, nm0 * nm1 * nm2, nq0, nq1, nq2, nelmt,
-                    d_basis0, d_basis1, d_basis2, d_in, d_wsp0, d_wsp1, d_out);
+                <<<(nelmt + threads - 1u) / threads, threads,
+                   sizeof(T) * ssize1>>>(nm0, nm1, nm2, nm0 * nm1 * nm2, nq0,
+                                         nq1, nq2, nelmt, d_basis0, d_basis1,
+                                         d_basis2, d_in, d_wsp0, d_wsp1, d_out);
             cudaDeviceSynchronize();
             time.stop();
             time_cuda1 = std::min(time_cuda1, time.elapsedSeconds());
@@ -1106,11 +1107,10 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransHexKernel<T, true, true>
-                <<<blocks, threads, sizeof(T) * ssize2>>>(
-                    nm0, nm1, nm2, nm0 * nm1 * nm2, nq0, nq1, nq2, nelmt,
-                    d_basis0, d_basis1, d_basis2, d_in_coa, d_wsp0, d_wsp1,
-                    d_out);
+            BwdTransHexKernel<T, true, true><<<(nelmt + threads - 1u) / threads,
+                                               threads, sizeof(T) * ssize2>>>(
+                nm0, nm1, nm2, nm0 * nm1 * nm2, nq0, nq1, nq2, nelmt, d_basis0,
+                d_basis1, d_basis2, d_in_coa, d_wsp0, d_wsp1, d_out);
             cudaDeviceSynchronize();
             time.stop();
             time_cuda2 = std::min(time_cuda2, time.elapsedSeconds());
