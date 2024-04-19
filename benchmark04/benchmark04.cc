@@ -309,10 +309,11 @@ void run_test(const unsigned int size, const unsigned int _nq0,
 
                     // direction 0
                     Kokkos::parallel_for(
-                        Kokkos::TeamThreadMDRange<Kokkos::Rank<2>, team_handle>(
-                            team, nq0, nm1),
-                        [&](const unsigned int &i, const unsigned int &q)
+                        Kokkos::TeamThreadRange(team, nq0 * nm1),
+                        [&](const unsigned int &tid)
                         {
+                            unsigned int q      = tid % nm1;
+                            unsigned int i      = tid / nm1;
                             unsigned int cnt_iq = nm1 * i + q;
                             unsigned int cnt_qp = nm0 * q;
 
@@ -329,10 +330,11 @@ void run_test(const unsigned int size, const unsigned int _nq0,
 
                     // direction 1
                     Kokkos::parallel_for(
-                        Kokkos::TeamThreadMDRange<Kokkos::Rank<2>, team_handle>(
-                            team, nq0, nq1),
-                        [&](const unsigned int &i, const unsigned int &j)
+                        Kokkos::TeamThreadRange(team, nq0 * nq1),
+                        [&](const unsigned int &tid)
                         {
+                            unsigned int i      = tid % nq0;
+                            unsigned int j      = tid / nq0;
                             unsigned int cnt_iq = nm1 * i;
                             unsigned int cnt_ji = nq0 * j + i;
 
@@ -399,33 +401,44 @@ void run_test(const unsigned int size, const unsigned int _nq0,
 
                     // copy to shared memory
                     Kokkos::parallel_for(
-                        Kokkos::TeamThreadMDRange<Kokkos::Rank<2>, team_handle>(
-                            team, nm0, nq0),
-                        [&](const unsigned int &p, const unsigned int &i)
-                        { s_basis0(p * nq0 + i) = d_basis0(p * nq0 + i); });
+                        Kokkos::TeamThreadRange(team, nm0 * nq0),
+                        [&](const unsigned int tid)
+                        {
+                            unsigned int i      = tid % nq0;
+                            unsigned int p      = tid / nq0;
+                            unsigned int cnt_pi = nq0 * p + i;
+                            s_basis0(cnt_pi)    = d_basis0(cnt_pi);
+                        });
 
                     Kokkos::parallel_for(
-                        Kokkos::TeamThreadMDRange<Kokkos::Rank<2>, team_handle>(
-                            team, nm1, nq1),
-                        [&](const unsigned int &q, const unsigned int &j)
-                        { s_basis1(q * nq1 + j) = d_basis1(q * nq1 + j); });
+                        Kokkos::TeamThreadRange(team, nm1 * nq1),
+                        [&](const unsigned int tid)
+                        {
+                            unsigned int j      = tid % nq1;
+                            unsigned int q      = tid / nq1;
+                            unsigned int cnt_qj = nq1 * q + j;
+                            s_basis1(cnt_qj)    = d_basis1(cnt_qj);
+                        });
 
                     Kokkos::parallel_for(
-                        Kokkos::TeamThreadMDRange<Kokkos::Rank<2>, team_handle>(
-                            team, nm1, nm0),
-                        [&](const unsigned int &q, const unsigned int &p) {
-                            s_wsp0(q * nm0 + p) =
-                                d_in(e * nm0 * nm1 + q * nm0 + p);
+                        Kokkos::TeamThreadRange(team, nm1 * nm0),
+                        [&](const unsigned int &tid)
+                        {
+                            unsigned int p      = tid % nm0;
+                            unsigned int q      = tid / nm0;
+                            unsigned int cnt_qp = q * nm0 + p;
+                            s_wsp0(cnt_qp)      = d_in(e * nm0 * nm1 + cnt_qp);
                         });
 
                     team.team_barrier();
 
                     // direction 0
                     Kokkos::parallel_for(
-                        Kokkos::TeamThreadMDRange<Kokkos::Rank<2>, team_handle>(
-                            team, nq0, nm1),
-                        [&](const unsigned int &i, const unsigned int &q)
+                        Kokkos::TeamThreadRange(team, nq0 * nm1),
+                        [&](const unsigned int &tid)
                         {
+                            unsigned int q      = tid % nm1;
+                            unsigned int i      = tid / nm1;
                             unsigned int cnt_iq = nm1 * i + q;
                             unsigned int cnt_qp = nm0 * q;
 
@@ -441,10 +454,11 @@ void run_test(const unsigned int size, const unsigned int _nq0,
 
                     // direction 1
                     Kokkos::parallel_for(
-                        Kokkos::TeamThreadMDRange<Kokkos::Rank<2>, team_handle>(
-                            team, nq0, nq1),
-                        [&](const unsigned int &i, const unsigned int &j)
+                        Kokkos::TeamThreadRange(team, nq0 * nq1),
+                        [&](const unsigned int &tid)
                         {
+                            unsigned int i      = tid % nq0;
+                            unsigned int j      = tid / nq0;
                             unsigned int cnt_iq = nm1 * i;
                             unsigned int cnt_ji = nq0 * j + i;
 
