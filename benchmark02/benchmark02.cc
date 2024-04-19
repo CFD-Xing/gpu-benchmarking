@@ -10,8 +10,8 @@
 #include <thrust/tabulate.h>
 #include <thrust/transform_reduce.h>
 
-#include "../utils/timer.h"
 #include "../utils/cuda_vectors.h"
+#include "../utils/timer.h"
 
 template <typename T, bool vl = false>
 __global__ void add_vector(T *x, T *y, unsigned int n)
@@ -140,7 +140,8 @@ template <typename T> void run_test(const unsigned int size)
         for (unsigned int t = 0; t < n_tests; ++t)
         {
             time.start();
-            add_vector<T, false><<<blocks, threads>>>(cuda_vector1, cuda_vector2, size);
+            add_vector<T, false>
+                <<<blocks, threads>>>(cuda_vector1, cuda_vector2, size);
             cudaDeviceSynchronize();
             time.stop();
             time_cuda1 = std::min(time_cuda1, time.elapsedSeconds());
@@ -175,7 +176,8 @@ template <typename T> void run_test(const unsigned int size)
         for (unsigned int t = 0; t < n_tests; ++t)
         {
             time.start();
-            add_vector<T, true><<<blocks, threads>>>(cuda_vector1, cuda_vector2, size);
+            add_vector<T, true>
+                <<<blocks, threads>>>(cuda_vector1, cuda_vector2, size);
             cudaDeviceSynchronize();
             time.stop();
             time_cuda2 = std::min(time_cuda2, time.elapsedSeconds());
@@ -190,7 +192,8 @@ template <typename T> void run_test(const unsigned int size)
 
     // Display results
     std::cout << std::setprecision(10);
-    std::cout << "Size " << size << "           Kokkos      Thrust      Cuda 1      Cuda 2"
+    std::cout << "Size " << size
+              << "           Kokkos      Thrust      Cuda        Cuda (vl)"
               << std::endl;
     std::cout << "Size " << size << " norm: " << std::sqrt(result_kokkos[0])
               << " " << std::sqrt(result_thrust[0]) << " "
