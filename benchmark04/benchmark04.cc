@@ -398,7 +398,7 @@ __global__ void BwdTransQuadKernel_QP_1D(
 
 template <typename T>
 void run_test(const unsigned int size, const unsigned int _nq0,
-              const unsigned int _nq1)
+              const unsigned int _nq1, const unsigned int _threads)
 {
     Timer time;
     const unsigned int nelmt   = size;
@@ -733,7 +733,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
     std::vector<T> result_cuda5(1);
     std::vector<T> result_cuda6(1);
     {
-        const unsigned int threads = 128;
+        const unsigned int threads = _threads;
         const unsigned int blocks  = nelmt / 16;
         std::vector<T> h_in(nelmt * nm0 * nm1);
         std::vector<T> h_in_coa(nelmt * nm0 * nm1);
@@ -860,7 +860,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransQuadKernel_QP_1D<<<blocks, std::min(nq0 * nq1, 256u)>>>(
+            BwdTransQuadKernel_QP_1D<<<blocks, std::min(nq0 * nq1, threads)>>>(
                 nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1, d_in,
                 d_wsp1, d_out);
             cudaDeviceSynchronize();
@@ -878,7 +878,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransQuadKernel_QP_1D<<<blocks, std::min(nq0 * nq1, 256u),
+            BwdTransQuadKernel_QP_1D<<<blocks, std::min(nq0 * nq1, threads),
                                        sizeof(T) * ssize6>>>(
                 nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1, d_in,
                 d_out);
@@ -941,8 +941,9 @@ void run_test(const unsigned int size, const unsigned int _nq0,
 
 int main(int argc, char **argv)
 {
-    unsigned int nq0 = (argc > 1) ? atoi(argv[1]) : 16u;
-    unsigned int nq1 = (argc > 2) ? atoi(argv[2]) : 16u;
+    unsigned int nq0     = (argc > 1) ? atoi(argv[1]) : 8u;
+    unsigned int nq1     = (argc > 2) ? atoi(argv[2]) : 8u;
+    unsigned int threads = (argc > 3) ? atoi(argv[3]) : 128u;
 
     std::cout << "--------------------------------" << std::endl;
     std::cout << "Benchmark04 : BwdTrans (2D)     " << std::endl;
@@ -951,7 +952,7 @@ int main(int argc, char **argv)
     Kokkos::initialize(argc, argv);
     for (unsigned int size = 2 << 6; size < 2 << 20; size <<= 1)
     {
-        run_test<float>(size, nq0, nq1);
+        run_test<float>(size, nq0, nq1, threads);
     }
     Kokkos::finalize();
 }
