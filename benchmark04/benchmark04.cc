@@ -136,8 +136,8 @@ __global__ void BwdTransQuadKernel_QP(
         {
             for (unsigned int i = threadIdx.y; i < nq0; i += blockDim.y)
             {
-                unsigned int cnt_iq = nm1 * i;
                 unsigned int cnt_ji = nq0 * j + i;
+                unsigned int cnt_iq = nm1 * i;
 
                 T tmp = 0.0;
                 for (unsigned int q = 0u; q < nm1; ++q, ++cnt_iq)
@@ -172,7 +172,7 @@ __global__ void BwdTransQuadKernel_QP(
     // Copy to shared memory.
     for (unsigned int p = threadIdx.x; p < nm0; p += blockDim.x)
     {
-        unsigned int cnt_pi = nq0 * p;
+        const unsigned int cnt_pi = nq0 * p;
 
         for (unsigned int i = threadIdx.y; i < nq0; i += blockDim.y)
         {
@@ -182,7 +182,7 @@ __global__ void BwdTransQuadKernel_QP(
 
     for (unsigned int q = threadIdx.x; q < nm1; q += blockDim.x)
     {
-        unsigned int cnt_qj = nq1 * q;
+        const unsigned int cnt_qj = nq1 * q;
 
         for (unsigned int j = threadIdx.y; j < nq1; j += blockDim.y)
         {
@@ -198,7 +198,7 @@ __global__ void BwdTransQuadKernel_QP(
         // Copy to shared memory.
         for (unsigned int q = threadIdx.x; q < nm1; q += blockDim.x)
         {
-            unsigned int cnt_qp = nm0 * q;
+            const unsigned int cnt_qp = nm0 * q;
 
             for (unsigned int p = threadIdx.y; p < nm0; p += blockDim.y)
             {
@@ -213,8 +213,8 @@ __global__ void BwdTransQuadKernel_QP(
         {
             for (unsigned int q = threadIdx.y; q < nm1; q += blockDim.y)
             {
-                unsigned int cnt_iq = nm1 * i + q;
-                unsigned int cnt_qp = nm0 * q;
+                const unsigned int cnt_iq = nm1 * i + q;
+                unsigned int cnt_qp       = nm0 * q;
 
                 T tmp = 0.0;
                 for (unsigned int p = 0u; p < nm0; ++p, ++cnt_qp)
@@ -232,8 +232,8 @@ __global__ void BwdTransQuadKernel_QP(
         {
             for (unsigned int i = threadIdx.y; i < nq0; i += blockDim.y)
             {
-                unsigned int cnt_iq = nm1 * i;
-                unsigned int cnt_ji = nq0 * j + i;
+                const unsigned int cnt_ji = nq0 * j + i;
+                unsigned int cnt_iq       = nm1 * i;
 
                 T tmp = 0.0;
                 for (unsigned int q = 0u; q < nm1; ++q, ++cnt_iq)
@@ -268,10 +268,10 @@ __global__ void BwdTransQuadKernel_QP_1D(
         // direction 0
         for (unsigned int tid = threadIdx.x; tid < nq0 * nm1; tid += blockDim.x)
         {
-            unsigned int q      = tid % nm1;
-            unsigned int i      = tid / nm1;
-            unsigned int cnt_iq = nm1 * i + q;
-            unsigned int cnt_qp = nm0 * q;
+            const unsigned int q      = tid % nm1;
+            const unsigned int i      = tid / nm1;
+            const unsigned int cnt_iq = nm1 * i + q;
+            unsigned int cnt_qp       = nm0 * q;
 
             T tmp = 0.0;
             for (unsigned int p = 0u; p < nm0; ++p, ++cnt_qp)
@@ -286,10 +286,10 @@ __global__ void BwdTransQuadKernel_QP_1D(
         // direction 1
         for (unsigned int tid = threadIdx.x; tid < nq0 * nq1; tid += blockDim.x)
         {
-            unsigned int i      = tid % nq0;
-            unsigned int j      = tid / nq0;
-            unsigned int cnt_iq = nm1 * i;
-            unsigned int cnt_ji = nq0 * j + i;
+            const unsigned int i      = tid % nq0;
+            const unsigned int j      = tid / nq0;
+            const unsigned int cnt_ji = nq0 * j + i;
+            unsigned int cnt_iq       = nm1 * i;
 
             T tmp = 0.0;
             for (unsigned int q = 0u; q < nm1; ++q, ++cnt_iq)
@@ -323,20 +323,20 @@ __global__ void BwdTransQuadKernel_QP_1D(
     // Copy to shared memory.
     for (unsigned int tid = threadIdx.x; tid < nm0 * nq0; tid += blockDim.x)
     {
-        unsigned int i      = tid % nq0;
-        unsigned int p      = tid / nq0;
-        unsigned int cnt_pi = nq0 * p;
+        const unsigned int i      = tid % nq0;
+        const unsigned int p      = tid / nq0;
+        const unsigned int cnt_pi = nq0 * p + i;
 
-        s_basis0[cnt_pi + i] = basis0[cnt_pi + i];
+        s_basis0[cnt_pi] = basis0[cnt_pi];
     }
 
     for (unsigned int tid = threadIdx.x; tid < nm1 * nq1; tid += blockDim.x)
     {
-        unsigned int j      = tid % nq1;
-        unsigned int q      = tid / nq1;
-        unsigned int cnt_qj = nq1 * q;
+        const unsigned int j      = tid % nq1;
+        const unsigned int q      = tid / nq1;
+        const unsigned int cnt_qj = nq1 * q + j;
 
-        s_basis1[cnt_qj + j] = basis1[cnt_qj + j];
+        s_basis1[cnt_qj] = basis1[cnt_qj];
     }
 
     while (e < nelmt)
@@ -347,11 +347,11 @@ __global__ void BwdTransQuadKernel_QP_1D(
         // Copy to shared memory.
         for (unsigned int tid = threadIdx.x; tid < nm0 * nm1; tid += blockDim.x)
         {
-            unsigned int p      = tid % nm0;
-            unsigned int q      = tid / nm0;
-            unsigned int cnt_qp = nm0 * q;
+            const unsigned int p      = tid % nm0;
+            const unsigned int q      = tid / nm0;
+            const unsigned int cnt_qp = nm0 * q + p;
 
-            s_wsp0[cnt_qp + p] = inptr[cnt_qp + p];
+            s_wsp0[cnt_qp] = inptr[cnt_qp];
         }
 
         __syncthreads();
@@ -359,10 +359,10 @@ __global__ void BwdTransQuadKernel_QP_1D(
         // direction 0
         for (unsigned int tid = threadIdx.x; tid < nq0 * nm1; tid += blockDim.x)
         {
-            unsigned int q      = tid % nm1;
-            unsigned int i      = tid / nm1;
-            unsigned int cnt_iq = nm1 * i + q;
-            unsigned int cnt_qp = nm0 * q;
+            const unsigned int q      = tid % nm1;
+            const unsigned int i      = tid / nm1;
+            const unsigned int cnt_iq = nm1 * i + q;
+            unsigned int cnt_qp       = nm0 * q;
 
             T tmp = 0.0;
             for (unsigned int p = 0u; p < nm0; ++p, ++cnt_qp)
@@ -377,10 +377,10 @@ __global__ void BwdTransQuadKernel_QP_1D(
         // direction 1
         for (unsigned int tid = threadIdx.x; tid < nq0 * nq1; tid += blockDim.x)
         {
-            unsigned int i      = tid % nq0;
-            unsigned int j      = tid / nq0;
-            unsigned int cnt_iq = nm1 * i;
-            unsigned int cnt_ji = nq0 * j + i;
+            const unsigned int i      = tid % nq0;
+            const unsigned int j      = tid / nq0;
+            const unsigned int cnt_ji = nq0 * j + i;
+            unsigned int cnt_iq       = nm1 * i;
 
             T tmp = 0.0;
             for (unsigned int q = 0u; q < nm1; ++q, ++cnt_iq)
@@ -417,7 +417,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
     {
         Kokkos::View<T *> d_in("d_in", nelmt * nm0 * nm1);
         Kokkos::View<T *> d_out("d_out", nelmt * nq0 * nq1);
-        Kokkos::View<T *> d_wsp("d_wsp", nelmt * nm0 * nq1);
+        Kokkos::View<T *> d_wsp("d_wsp", nelmt * nq0 * nm1);
         Kokkos::View<T *> d_basis0("d_basis0", nm0 * nq0);
         Kokkos::View<T *> d_basis1("d_basis1", nm1 * nq1);
         Kokkos::parallel_for(
@@ -434,12 +434,12 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             });
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0u, 0u}, {nm0, nq0}),
-            KOKKOS_LAMBDA(const unsigned p, const unsigned i) {
+            KOKKOS_LAMBDA(const unsigned &p, const unsigned &i) {
                 d_basis0(p * nq0 + i) = cos((T)(p * nq0 + i));
             });
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0u, 0u}, {nm1, nq1}),
-            KOKKOS_LAMBDA(const unsigned q, const unsigned j) {
+            KOKKOS_LAMBDA(const unsigned &q, const unsigned &j) {
                 d_basis1(q * nq1 + j) = cos((T)(q * nq1 + j));
             });
 
@@ -451,17 +451,17 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                 Kokkos::TeamPolicy<>(nelmt, Kokkos::AUTO),
                 KOKKOS_LAMBDA(const team_handle &team) {
                     // element index
-                    unsigned int e = team.league_rank();
+                    const unsigned int e = team.league_rank();
 
                     // direction 0
                     Kokkos::parallel_for(
                         Kokkos::TeamThreadRange(team, nq0 * nm1),
                         [&](const unsigned int &tid)
                         {
-                            unsigned int q      = tid % nm1;
-                            unsigned int i      = tid / nm1;
-                            unsigned int cnt_iq = nm1 * i + q;
-                            unsigned int cnt_qp = nm0 * q;
+                            const unsigned int q      = tid % nm1;
+                            const unsigned int i      = tid / nm1;
+                            const unsigned int cnt_iq = nm1 * i + q;
+                            unsigned int cnt_qp       = nm0 * q;
 
                             T tmp = 0.0;
                             for (unsigned int p = 0u; p < nm0; ++p, ++cnt_qp)
@@ -479,10 +479,10 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                         Kokkos::TeamThreadRange(team, nq0 * nq1),
                         [&](const unsigned int &tid)
                         {
-                            unsigned int i      = tid % nq0;
-                            unsigned int j      = tid / nq0;
-                            unsigned int cnt_iq = nm1 * i;
-                            unsigned int cnt_ji = nq0 * j + i;
+                            const unsigned int i      = tid % nq0;
+                            const unsigned int j      = tid / nq0;
+                            const unsigned int cnt_ji = nq0 * j + i;
+                            unsigned int cnt_iq       = nm1 * i;
 
                             T tmp = 0.0;
                             for (unsigned int q = 0u; q < nm1; ++q, ++cnt_iq)
@@ -524,7 +524,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                     .set_scratch_size(slevel, Kokkos::PerTeam(shmem_size)),
                 KOKKOS_LAMBDA(const team_handle &team) {
                     // element index
-                    unsigned int e = team.league_rank();
+                    const unsigned int e = team.league_rank();
 
                     // shared memory subview assignment
                     Kokkos::View<
@@ -548,32 +548,32 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                     // copy to shared memory
                     Kokkos::parallel_for(
                         Kokkos::TeamThreadRange(team, nm0 * nq0),
-                        [&](const unsigned int tid)
+                        [&](const unsigned int &tid)
                         {
-                            unsigned int i      = tid % nq0;
-                            unsigned int p      = tid / nq0;
-                            unsigned int cnt_pi = nq0 * p + i;
-                            s_basis0(cnt_pi)    = d_basis0(cnt_pi);
+                            const unsigned int i      = tid % nq0;
+                            const unsigned int p      = tid / nq0;
+                            const unsigned int cnt_pi = nq0 * p + i;
+                            s_basis0(cnt_pi)          = d_basis0(cnt_pi);
                         });
 
                     Kokkos::parallel_for(
                         Kokkos::TeamThreadRange(team, nm1 * nq1),
-                        [&](const unsigned int tid)
+                        [&](const unsigned int &tid)
                         {
-                            unsigned int j      = tid % nq1;
-                            unsigned int q      = tid / nq1;
-                            unsigned int cnt_qj = nq1 * q + j;
-                            s_basis1(cnt_qj)    = d_basis1(cnt_qj);
+                            const unsigned int j      = tid % nq1;
+                            const unsigned int q      = tid / nq1;
+                            const unsigned int cnt_qj = nq1 * q + j;
+                            s_basis1(cnt_qj)          = d_basis1(cnt_qj);
                         });
 
                     Kokkos::parallel_for(
                         Kokkos::TeamThreadRange(team, nm1 * nm0),
                         [&](const unsigned int &tid)
                         {
-                            unsigned int p      = tid % nm0;
-                            unsigned int q      = tid / nm0;
-                            unsigned int cnt_qp = q * nm0 + p;
-                            s_wsp0(cnt_qp)      = d_in(e * nm0 * nm1 + cnt_qp);
+                            const unsigned int p      = tid % nm0;
+                            const unsigned int q      = tid / nm0;
+                            const unsigned int cnt_qp = q * nm0 + p;
+                            s_wsp0(cnt_qp) = d_in(e * nm0 * nm1 + cnt_qp);
                         });
 
                     team.team_barrier();
@@ -583,10 +583,10 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                         Kokkos::TeamThreadRange(team, nq0 * nm1),
                         [&](const unsigned int &tid)
                         {
-                            unsigned int q      = tid % nm1;
-                            unsigned int i      = tid / nm1;
-                            unsigned int cnt_iq = nm1 * i + q;
-                            unsigned int cnt_qp = nm0 * q;
+                            const unsigned int q      = tid % nm1;
+                            const unsigned int i      = tid / nm1;
+                            const unsigned int cnt_iq = nm1 * i + q;
+                            unsigned int cnt_qp       = nm0 * q;
 
                             T tmp = 0.0;
                             for (unsigned int p = 0u; p < nm0; ++p, ++cnt_qp)
@@ -603,10 +603,10 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                         Kokkos::TeamThreadRange(team, nq0 * nq1),
                         [&](const unsigned int &tid)
                         {
-                            unsigned int i      = tid % nq0;
-                            unsigned int j      = tid / nq0;
-                            unsigned int cnt_iq = nm1 * i;
-                            unsigned int cnt_ji = nq0 * j + i;
+                            const unsigned int i      = tid % nq0;
+                            const unsigned int j      = tid / nq0;
+                            const unsigned int cnt_ji = nq0 * j + i;
+                            unsigned int cnt_iq       = nm1 * i;
 
                             T tmp = 0.0;
                             for (unsigned int q = 0u; q < nm1; ++q, ++cnt_iq)
@@ -734,7 +734,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
     std::vector<T> result_cuda6(1);
     {
         const unsigned int threads = 128;
-        const unsigned int blocks  = nelmt / 32;
+        const unsigned int blocks  = nelmt / 16;
         std::vector<T> h_in(nelmt * nm0 * nm1);
         std::vector<T> h_in_coa(nelmt * nm0 * nm1);
         std::vector<T> h_out(nelmt * nq0 * nq1);
@@ -860,7 +860,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransQuadKernel_QP_1D<<<blocks, nq0 * nq1>>>(
+            BwdTransQuadKernel_QP_1D<<<blocks, std::min(nq0 * nq1, 256u)>>>(
                 nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1, d_in,
                 d_wsp1, d_out);
             cudaDeviceSynchronize();
@@ -878,7 +878,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransQuadKernel_QP_1D<<<blocks, nq0 * nq1,
+            BwdTransQuadKernel_QP_1D<<<blocks, std::min(nq0 * nq1, 256u),
                                        sizeof(T) * ssize6>>>(
                 nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1, d_in,
                 d_out);
@@ -903,8 +903,9 @@ void run_test(const unsigned int size, const unsigned int _nq0,
     std::cout << std::setprecision(10);
     std::cout
         << "nelmt " << nelmt
-        << "           Kokkos 1      Kokkos 2     cuBLAS          Cuda 1     "
-           "   Cuda 2        Cuda 3        Cuda 4        Cuda 5        Cuda 6"
+        << "       Kokkos (QP)   Kokkos (QP/Shared) cuBLAS          Cuda     "
+           "   Cuda (Coales)    Cuda (QP)      Cuda (QP/Shared)  Cuda (QP-1D)  "
+           " Cuda (QP-1D/Shared)"
         << std::endl;
     std::cout << "nelmt " << nelmt << " norm: " << std::sqrt(result_kokkos1[0])
               << "     " << std::sqrt(result_kokkos2[0]) << "     "
