@@ -642,11 +642,11 @@ void run_test(const unsigned int size, const unsigned int _nq0,
 
                     // direction 0
                     Kokkos::parallel_for(
-                        //Kokkos::TeamThreadMDRange<Kokkos::Rank<3>,
-                        //team_handle>(
-                        //    team, nq0, nm2, nm1),
+                        // Kokkos::TeamThreadMDRange<Kokkos::Rank<3>,
+                        // team_handle>(
+                        //     team, nq0, nm2, nm1),
                         //[&](const unsigned int &i, const unsigned int &r,
-                        //     const unsigned &q)
+                        //      const unsigned &q)
                         Kokkos::TeamThreadRange(team, nq0 * nm2 * nm1),
                         [&](const unsigned int &tid)
                         {
@@ -1181,9 +1181,8 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransHexKernel_QP<<<blocks,
-                                   dim3(nq0, nq1,
-                                        std::min(nq2, 1024u/(nq0 * nq1)))>>>(
+            BwdTransHexKernel_QP<<<
+                blocks, dim3(nq0, nq1, std::min(nq2, 1024u / (nq0 * nq1)))>>>(
                 nm0, nm1, nm2, nm0 * nm1 * nm2, nq0, nq1, nq2, nelmt, d_basis0,
                 d_basis1, d_basis2, d_in, d_wsp2, d_wsp3, d_out);
             cudaDeviceSynchronize();
@@ -1202,12 +1201,11 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransHexKernel_QP<<<blocks,
-                                   dim3(nq0, nq1,
-                                        std::min(nq2, 1024u/ (nq0 * nq1))),
-                                   sizeof(T) * ssize4>>>(
-                nm0, nm1, nm2, nm0 * nm1 * nm2, nq0, nq1, nq2, nelmt, d_basis0,
-                d_basis1, d_basis2, d_in, d_out);
+            BwdTransHexKernel_QP<<<
+                blocks, dim3(nq0, nq1, std::min(nq2, 1024u / (nq0 * nq1))),
+                sizeof(T) * ssize4>>>(nm0, nm1, nm2, nm0 * nm1 * nm2, nq0, nq1,
+                                      nq2, nelmt, d_basis0, d_basis1, d_basis2,
+                                      d_in, d_out);
             cudaDeviceSynchronize();
             time.stop();
             time_cuda4 = std::min(time_cuda4, time.elapsedSeconds());
@@ -1221,7 +1219,8 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransHexKernel_QP_1D<<<blocks, std::min(nq0*nq1*nq2,threads)>>>(
+            BwdTransHexKernel_QP_1D<<<blocks,
+                                      std::min(nq0 * nq1 * nq2, threads)>>>(
                 nm0, nm1, nm2, nm0 * nm1 * nm2, nq0, nq1, nq2, nelmt, d_basis0,
                 d_basis1, d_basis2, d_in, d_wsp2, d_wsp3, d_out);
             cudaDeviceSynchronize();
@@ -1240,7 +1239,9 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransHexKernel_QP_1D<<<blocks, std::min(nq0*nq1*nq2,threads), sizeof(T) * ssize6>>>(
+            BwdTransHexKernel_QP_1D<<<blocks,
+                                      std::min(nq0 * nq1 * nq2, threads),
+                                      sizeof(T) * ssize6>>>(
                 nm0, nm1, nm2, nm0 * nm1 * nm2, nq0, nq1, nq2, nelmt, d_basis0,
                 d_basis1, d_basis2, d_in, d_out);
             cudaDeviceSynchronize();
