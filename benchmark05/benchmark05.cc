@@ -634,7 +634,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            Kokkos::parallel_for(
+            Kokkos::parallel_for("Kokkos 1",
                 Kokkos::TeamPolicy<>(nelmt, Kokkos::AUTO),
                 KOKKOS_LAMBDA(const team_handle &team) {
                     // element index
@@ -731,7 +731,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                 T *, Kokkos::DefaultExecutionSpace::scratch_memory_space,
                 Kokkos::MemoryTraits<Kokkos::Unmanaged>>::shmem_size(ssize);
 
-            Kokkos::parallel_for(
+            Kokkos::parallel_for("Kokkos 2",
                 Kokkos::TeamPolicy<>(nelmt, Kokkos::AUTO)
                     .set_scratch_size(slevel, Kokkos::PerTeam(shmem_size)),
                 KOKKOS_LAMBDA(const team_handle &team) {
