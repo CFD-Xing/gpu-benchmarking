@@ -9,8 +9,8 @@
 #include <thrust/tabulate.h>
 #include <thrust/transform_reduce.h>
 
-#include "../utils/timer.h"
 #include "../utils/cuda_vectors.h"
+#include "../utils/timer.h"
 
 template <typename T, bool vl = false>
 __global__ void l2norm_vl(T *__restrict__ sums, T *__restrict__ data,
@@ -188,8 +188,8 @@ template <typename T> void run_test(const unsigned int size)
     double time_cuda1 = std::numeric_limits<double>::max();
     std::vector<T> result_cuda1(1);
     {
-        constexpr int threads = 256;
-        constexpr int blocks  = 256;
+        const unsigned int threads = 256u;
+        const unsigned int blocks  = std::min(size / threads, 256u);
         thrust::device_vector<T> ddata(size);
         thrust::tabulate(ddata.begin(), ddata.end(),
                          [] __device__(unsigned int i)
@@ -202,7 +202,8 @@ template <typename T> void run_test(const unsigned int size)
             cudaMalloc(&result, sizeof(T));
             cudaMemset(sums, 0, blocks * sizeof(T));
             cudaMemset(result, 0, sizeof(T));
-            l2norm_vl<T, false><<<blocks, threads>>>(sums, ddata.data().get(), size);
+            l2norm_vl<T, false>
+                <<<blocks, threads>>>(sums, ddata.data().get(), size);
             reduce_vl<T, false><<<1, blocks>>>(result, sums, blocks);
             cudaMemcpy(result_cuda1.data(), result, sizeof(T),
                        cudaMemcpyDeviceToHost);
@@ -217,8 +218,8 @@ template <typename T> void run_test(const unsigned int size)
     double time_cuda2 = std::numeric_limits<double>::max();
     std::vector<T> result_cuda2(1);
     {
-        constexpr int threads = 256;
-        constexpr int blocks  = 256;
+        const unsigned int threads = 256u;
+        const unsigned int blocks  = std::min(size / threads, 256u);
         thrust::device_vector<T> ddata(size);
         thrust::tabulate(ddata.begin(), ddata.end(),
                          [] __device__(unsigned int i)
@@ -231,7 +232,8 @@ template <typename T> void run_test(const unsigned int size)
             cudaMalloc(&result, sizeof(T));
             cudaMemset(sums, 0, blocks * sizeof(T));
             cudaMemset(result, 0, sizeof(T));
-            l2norm_vl<T, true><<<blocks, threads>>>(sums, ddata.data().get(), size);
+            l2norm_vl<T, true>
+                <<<blocks, threads>>>(sums, ddata.data().get(), size);
             reduce_vl<T, true><<<1, blocks>>>(result, sums, blocks);
             cudaMemcpy(result_cuda2.data(), result, sizeof(T),
                        cudaMemcpyDeviceToHost);
@@ -244,7 +246,8 @@ template <typename T> void run_test(const unsigned int size)
 
     // Display results
     std::cout << std::setprecision(10);
-    std::cout << "Size " << size << "           Kokkos      Thrust      Cuda 1      Cuda 2"
+    std::cout << "Size " << size
+              << "           Kokkos      Thrust      Cuda        Cuda (vl)"
               << std::endl;
     std::cout << "Size " << size << " norm: " << std::sqrt(result_kokkos[0])
               << " " << std::sqrt(result_thrust[0]) << " "
