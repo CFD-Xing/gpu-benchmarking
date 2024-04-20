@@ -413,10 +413,15 @@ void run_test(const unsigned int size, const unsigned int _nq0,
     typedef Kokkos::TeamPolicy<>::member_type team_handle;
     double time_kokkos1 = std::numeric_limits<double>::max();
     double time_kokkos2 = std::numeric_limits<double>::max();
+    double time_kokkos3 = std::numeric_limits<double>::max();
+    double time_kokkos4 = std::numeric_limits<double>::max();
     std::vector<T> result_kokkos1(1);
     std::vector<T> result_kokkos2(1);
+    std::vector<T> result_kokkos3(1);
+    std::vector<T> result_kokkos4(1);
     {
         Kokkos::View<T *> d_in("d_in", nelmt * nm0 * nm1);
+        Kokkos::View<T *> d_in_coa("d_in", nelmt * nm0 * nm1);
         Kokkos::View<T *> d_out("d_out", nelmt * nq0 * nq1);
         Kokkos::View<T *> d_wsp("d_wsp", nelmt * nq0 * nm1);
         Kokkos::View<T *> d_basis0("d_basis0", nm0 * nq0);
@@ -428,8 +433,11 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                 Kokkos::parallel_for(
                     Kokkos::TeamThreadMDRange<Kokkos::Rank<2>, team_handle>(
                         team, nm0, nm1),
-                    [&](const unsigned int &p, const unsigned int &q) {
+                    [&](const unsigned int &p, const unsigned int &q)
+                    {
                         d_in(e * nm0 * nm1 + p * nm1 + q) =
+                            sin((T)(p * nm1 + q + 1));
+                        d_in_coa((p * nm1 + q) * nelmt + e) =
                             sin((T)(p * nm1 + q + 1));
                     });
             });
@@ -444,7 +452,93 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                 d_basis1(q * nq1 + j) = cos((T)(q * nq1 + j));
             });
 
-        // Kokkos 1 - No shared memory
+        // Kokkos 1 - Uncoalesce
+        for (unsigned int t = 0u; t < n_tests; ++t)
+        {
+            time.start();
+            Kokkos::parallel_for(
+                nelmt, KOKKOS_LAMBDA(const unsigned int &e) {
+                    for (unsigned int i = 0; i < nq0; ++i)
+                    {
+                        for (unsigned int q = 0, cnt_qp = 0; q < nm1; ++q)
+                        {
+                            T tmp = 0.0;
+                            for (unsigned int p = 0; p < nm0; ++p, ++cnt_qp)
+                            {
+                                tmp += d_in(nm0 * nm1 * e + cnt_qp) *
+                                       d_basis0(p * nq0 + i);
+                            }
+                            d_wsp(nm1 * e + q) = tmp;
+                        }
+
+                        for (unsigned int j = 0; j < nq1; ++j)
+                        {
+                            T tmp = 0.0;
+                            for (unsigned int q = 0; q < nm1; ++q)
+                            {
+                                tmp +=
+                                    d_wsp(nm1 * e + q) * d_basis1(q * nq1 + j);
+                            }
+                            d_out(nq0 * nq1 * e + nq0 * j + i) = tmp;
+                        }
+                    }
+                });
+            Kokkos::fence();
+            time.stop();
+            const double t_w = time.elapsedSeconds();
+            time_kokkos1     = std::min(time_kokkos1, t_w);
+        }
+        Kokkos::parallel_reduce(
+            nelmt * nq0 * nq1,
+            KOKKOS_LAMBDA(unsigned int i, T &val) {
+                val += d_out(i) * d_out(i);
+            },
+            result_kokkos1[0]);
+
+        // Kokkos 2 - Coalesce
+        for (unsigned int t = 0u; t < n_tests; ++t)
+        {
+            time.start();
+            Kokkos::parallel_for(
+                nelmt, KOKKOS_LAMBDA(const unsigned int &e) {
+                    for (unsigned int i = 0; i < nq0; ++i)
+                    {
+                        for (unsigned int q = 0, cnt_qp = 0; q < nm1; ++q)
+                        {
+                            T tmp = 0.0;
+                            for (unsigned int p = 0; p < nm0; ++p, ++cnt_qp)
+                            {
+                                tmp += d_in_coa(nelmt * cnt_qp + e) *
+                                       d_basis0(p * nq0 + i);
+                            }
+                            d_wsp(nelmt * q + e) = tmp;
+                        }
+
+                        for (unsigned int j = 0; j < nq1; ++j)
+                        {
+                            T tmp = 0.0;
+                            for (unsigned int q = 0; q < nm1; ++q)
+                            {
+                                tmp += d_wsp(nelmt * q + e) *
+                                       d_basis1(q * nq1 + j);
+                            }
+                            d_out(nelmt * (nq0 * j + i) + e) = tmp;
+                        }
+                    }
+                });
+            Kokkos::fence();
+            time.stop();
+            const double t_w = time.elapsedSeconds();
+            time_kokkos2     = std::min(time_kokkos2, t_w);
+        }
+        Kokkos::parallel_reduce(
+            nelmt * nq0 * nq1,
+            KOKKOS_LAMBDA(unsigned int i, T &val) {
+                val += d_out(i) * d_out(i);
+            },
+            result_kokkos2[0]);
+
+        // Kokkos 3 - No shared memory
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
@@ -499,16 +593,16 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             Kokkos::fence();
             time.stop();
             const double t_w = time.elapsedSeconds();
-            time_kokkos1     = std::min(time_kokkos1, t_w);
+            time_kokkos3     = std::min(time_kokkos3, t_w);
         }
         Kokkos::parallel_reduce(
             nelmt * nq0 * nq1,
             KOKKOS_LAMBDA(unsigned int i, T &val) {
                 val += d_out(i) * d_out(i);
             },
-            result_kokkos1[0]);
+            result_kokkos3[0]);
 
-        // Kokkos 2 - Shared memory
+        // Kokkos 4 - Shared memory
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
@@ -622,14 +716,14 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             Kokkos::fence();
             time.stop();
             const double t_w = time.elapsedSeconds();
-            time_kokkos2     = std::min(time_kokkos2, t_w);
+            time_kokkos4     = std::min(time_kokkos4, t_w);
         }
         Kokkos::parallel_reduce(
             nelmt * nq0 * nq1,
             KOKKOS_LAMBDA(unsigned int i, T &val) {
                 val += d_out(i) * d_out(i);
             },
-            result_kokkos2[0]);
+            result_kokkos4[0]);
     }
 
     // cuBLAS kernels
@@ -904,13 +998,17 @@ void run_test(const unsigned int size, const unsigned int _nq0,
     std::cout << std::setprecision(10);
     std::cout
         << "nelmt " << nelmt
-        << "       Kokkos (QP)   Kokkos (QP/Shared) cuBLAS          Cuda "
-           "(uncoales)"
+        << "       Kokkos (Uncoales) Kokkos (Coales) Kokkos (QP)   Kokkos "
+           "(QP/Shared) cuBLAS     "
+           "     Cuda "
+           "(Uncoales)"
            " Cuda (Coales)    Cuda (QP)      Cuda (QP/Shared)  Cuda (QP-1D)  "
            " Cuda (QP-1D/Shared)"
         << std::endl;
     std::cout << "nelmt " << nelmt << " norm: " << std::sqrt(result_kokkos1[0])
               << "     " << std::sqrt(result_kokkos2[0]) << "     "
+              << std::sqrt(result_kokkos3[0]) << "     "
+              << std::sqrt(result_kokkos4[0]) << "     "
               << std::sqrt(result_cublas[0]) << "     "
               << std::sqrt(result_cuda1[0]) << "     "
               << std::sqrt(result_cuda2[0]) << "     "
@@ -924,6 +1022,10 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 + nq0 * nq1) / time_kokkos1
         << "     "
         << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 + nq0 * nq1) / time_kokkos2
+        << "     "
+        << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 + nq0 * nq1) / time_kokkos3
+        << "     "
+        << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 + nq0 * nq1) / time_kokkos4
         << "     "
         << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 + nq0 * nq1) / time_cublas
         << "     "
