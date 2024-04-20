@@ -1214,8 +1214,10 @@ void run_test(const unsigned int size, const unsigned int _nq0,
     std::cout << std::setprecision(10);
     std::cout
         << "nelmt " << nelmt
-        << "           Kokkos 1      Kokkos 2     cuBLAS          Cuda 1     "
-           "   Cuda 2        Cuda 3        Cuda 4        Cuda 5        Cuda 6"
+        << "       Kokkos (QP)   Kokkos (QP/Shared) cuBLAS          Cuda "
+           "(uncoales)"
+           " Cuda (Coales)    Cuda (QP)      Cuda (QP/Shared)  Cuda (QP-1D)  "
+           " Cuda (QP-1D/Shared)"
         << std::endl;
     std::cout << "nelmt " << nelmt << " norm: " << std::sqrt(result_kokkos1[0])
               << "     " << std::sqrt(result_kokkos2[0]) << "     "
