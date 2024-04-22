@@ -846,9 +846,10 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         {
             time.start();
             BwdTransQuadKernel<T, true, false>
-                <<<nelmt / threads, threads, sizeof(T) * ssize1>>>(
-                    nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1,
-                    d_in, d_wsp0, d_out);
+                <<<(nelmt + threads - 1u) / threads, threads,
+                   sizeof(T) * ssize1>>>(nm0, nm1, nm0 * nm1, nq0, nq1, nelmt,
+                                         d_basis0, d_basis1, d_in, d_wsp0,
+                                         d_out);
             cudaDeviceSynchronize();
             time.stop();
             time_cuda1 = std::min(time_cuda1, time.elapsedSeconds());
@@ -864,9 +865,10 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         {
             time.start();
             BwdTransQuadKernel<T, true, true>
-                <<<nelmt / threads, threads, sizeof(T) * ssize2>>>(
-                    nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1,
-                    d_in_coa, d_wsp0, d_out);
+                <<<(nelmt + threads - 1u) / threads, threads,
+                   sizeof(T) * ssize2>>>(nm0, nm1, nm0 * nm1, nq0, nq1, nelmt,
+                                         d_basis0, d_basis1, d_in_coa, d_wsp0,
+                                         d_out);
             cudaDeviceSynchronize();
             time.stop();
             time_cuda2 = std::min(time_cuda2, time.elapsedSeconds());
@@ -880,8 +882,8 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransQuadKernel_QP<<<blocks, dim3(std::min(nq0, 16u),
-                                                 std::min(nq1, 16u))>>>(
+            BwdTransQuadKernel_QP<<<blocks, dim3(std::min(nq0, 32u),
+                                                 std::min(nq1, 32u))>>>(
                 nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1, d_in,
                 d_wsp1, d_out);
             cudaDeviceSynchronize();
@@ -900,7 +902,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         {
             time.start();
             BwdTransQuadKernel_QP<<<
-                blocks, dim3(std::min(nq0, 16u), std::min(nq1, 16u)),
+                blocks, dim3(std::min(nq0, 32u), std::min(nq1, 32u)),
                 sizeof(T) * ssize4>>>(nm0, nm1, nm0 * nm1, nq0, nq1, nelmt,
                                       d_basis0, d_basis1, d_in, d_out);
             cudaDeviceSynchronize();
