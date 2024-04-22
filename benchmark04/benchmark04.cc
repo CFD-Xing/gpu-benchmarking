@@ -48,14 +48,14 @@ __global__ void BwdTransQuadKernel(
 
     while (e < nelmt)
     {
-        for (unsigned int i = 0; i < nq0; ++i)
+        for (unsigned int i = 0u; i < nq0; ++i)
         {
-            for (unsigned int q = 0, cnt_qp = 0; q < nm1; ++q)
+            for (unsigned int q = 0u, cnt_qp = 0u; q < nm1; ++q)
             {
                 T tmp = 0.0;
                 if constexpr (coal)
                 {
-                    for (unsigned int p = 0; p < nm0; ++p, ++cnt_qp)
+                    for (unsigned int p = 0u; p < nm0; ++p, ++cnt_qp)
                     {
                         tmp += in[nelmt * cnt_qp + e] * s_basis0[p * nq0 + i];
                     }
@@ -63,7 +63,7 @@ __global__ void BwdTransQuadKernel(
                 }
                 else
                 {
-                    for (unsigned int p = 0; p < nm0; ++p, ++cnt_qp)
+                    for (unsigned int p = 0u; p < nm0; ++p, ++cnt_qp)
                     {
                         tmp += in[nmTot * e + cnt_qp] * s_basis0[p * nq0 + i];
                     }
@@ -71,12 +71,12 @@ __global__ void BwdTransQuadKernel(
                 }
             }
 
-            for (unsigned int j = 0; j < nq1; ++j)
+            for (unsigned int j = 0u; j < nq1; ++j)
             {
                 T tmp = 0.0;
                 if constexpr (coal)
                 {
-                    for (unsigned int q = 0; q < nm1; ++q)
+                    for (unsigned int q = 0u; q < nm1; ++q)
                     {
                         tmp += wsp[nelmt * q + e] * s_basis1[q * nq1 + j];
                     }
@@ -84,7 +84,7 @@ __global__ void BwdTransQuadKernel(
                 }
                 else
                 {
-                    for (unsigned int q = 0; q < nm1; ++q)
+                    for (unsigned int q = 0u; q < nm1; ++q)
                     {
                         tmp += wsp[nm1 * e + q] * s_basis1[q * nq1 + j];
                     }
@@ -438,12 +438,12 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             time.start();
             Kokkos::parallel_for(
                 nelmt, KOKKOS_LAMBDA(const unsigned int &e) {
-                    for (unsigned int i = 0; i < nq0; ++i)
+                    for (unsigned int i = 0u; i < nq0; ++i)
                     {
-                        for (unsigned int q = 0, cnt_qp = 0; q < nm1; ++q)
+                        for (unsigned int q = 0u, cnt_qp = 0u; q < nm1; ++q)
                         {
                             T tmp = 0.0;
-                            for (unsigned int p = 0; p < nm0; ++p, ++cnt_qp)
+                            for (unsigned int p = 0u; p < nm0; ++p, ++cnt_qp)
                             {
                                 tmp += d_in(nm0 * nm1 * e + cnt_qp) *
                                        d_basis0(p * nq0 + i);
@@ -451,10 +451,10 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                             d_wsp(nm1 * e + q) = tmp;
                         }
 
-                        for (unsigned int j = 0; j < nq1; ++j)
+                        for (unsigned int j = 0u; j < nq1; ++j)
                         {
                             T tmp = 0.0;
-                            for (unsigned int q = 0; q < nm1; ++q)
+                            for (unsigned int q = 0u; q < nm1; ++q)
                             {
                                 tmp +=
                                     d_wsp(nm1 * e + q) * d_basis1(q * nq1 + j);
@@ -481,12 +481,12 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             time.start();
             Kokkos::parallel_for(
                 nelmt, KOKKOS_LAMBDA(const unsigned int &e) {
-                    for (unsigned int i = 0; i < nq0; ++i)
+                    for (unsigned int i = 0u; i < nq0; ++i)
                     {
-                        for (unsigned int q = 0, cnt_qp = 0; q < nm1; ++q)
+                        for (unsigned int q = 0u, cnt_qp = 0u; q < nm1; ++q)
                         {
                             T tmp = 0.0;
-                            for (unsigned int p = 0; p < nm0; ++p, ++cnt_qp)
+                            for (unsigned int p = 0u; p < nm0; ++p, ++cnt_qp)
                             {
                                 tmp += d_in_coa(nelmt * cnt_qp + e) *
                                        d_basis0(p * nq0 + i);
@@ -494,10 +494,10 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                             d_wsp(nelmt * q + e) = tmp;
                         }
 
-                        for (unsigned int j = 0; j < nq1; ++j)
+                        for (unsigned int j = 0u; j < nq1; ++j)
                         {
                             T tmp = 0.0;
-                            for (unsigned int q = 0; q < nm1; ++q)
+                            for (unsigned int q = 0u; q < nm1; ++q)
                             {
                                 tmp += d_wsp(nelmt * q + e) *
                                        d_basis1(q * nq1 + j);
@@ -846,7 +846,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         {
             time.start();
             BwdTransQuadKernel<T, true, false>
-                <<<blocks, threads, sizeof(T) * ssize1>>>(
+                <<<nelmt / threads, threads, sizeof(T) * ssize1>>>(
                     nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1,
                     d_in, d_wsp0, d_out);
             cudaDeviceSynchronize();
@@ -864,7 +864,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         {
             time.start();
             BwdTransQuadKernel<T, true, true>
-                <<<blocks, threads, sizeof(T) * ssize2>>>(
+                <<<nelmt / threads, threads, sizeof(T) * ssize2>>>(
                     nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1,
                     d_in_coa, d_wsp0, d_out);
             cudaDeviceSynchronize();
