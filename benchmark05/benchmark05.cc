@@ -1216,7 +1216,9 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         {
             time.start();
             BwdTransHexKernel_QP<<<
-                blocks, dim3(nq0, nq1, std::min(nq2, 1024u / (nq0 * nq1)))>>>(
+                blocks,
+                dim3(std::min(nq0, 32u), std::min(nq1, 32u),
+                     std::min(nq2, std::max(1u, 1024u / (nq0 * nq1))))>>>(
                 nm0, nm1, nm2, nm0 * nm1 * nm2, nq0, nq1, nq2, nelmt, d_basis0,
                 d_basis1, d_basis2, d_in, d_wsp2, d_wsp3, d_out);
             cudaDeviceSynchronize();
@@ -1236,7 +1238,9 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         {
             time.start();
             BwdTransHexKernel_QP<<<
-                blocks, dim3(nq0, nq1, std::min(nq2, 1024u / (nq0 * nq1))),
+                blocks,
+                dim3(std::min(nq0, 32u), std::min(nq1, 32u),
+                     std::min(nq2, std::max(1u, 1024u / (nq0 * nq1)))),
                 sizeof(T) * ssize4>>>(nm0, nm1, nm2, nm0 * nm1 * nm2, nq0, nq1,
                                       nq2, nelmt, d_basis0, d_basis1, d_basis2,
                                       d_in, d_out);
