@@ -961,7 +961,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
     std::cout << std::setprecision(10);
     std::cout
         << "nelmt " << nelmt
-        << "       Kokkos (Uncoales) Kokkos (Coales) Kokkos (QP)   Kokkos "
+        << " Case: Kokkos (Uncoales) Kokkos (Coales) Kokkos (QP)   Kokkos "
            "(QP/Shared) cuBLAS     "
            "     Cuda "
            "(Uncoales)"
@@ -1016,7 +1016,7 @@ int main(int argc, char **argv)
     std::cout << "--------------------------------" << std::endl;
     std::cout << "Benchmark04 : BwdTrans (2D)     " << std::endl;
     std::cout << "--------------------------------" << std::endl;
-    std::cout << "nq0 = " << nq0 << " nq1 = " << nq1 << std::endl;
+    std::cout << "BwdTrans (NQ = " << nq0 << ", " << nq1 << ")" << std::endl;
     Kokkos::initialize(argc, argv);
     for (unsigned int size = 2 << 6; size < 2 << 20; size <<= 1)
     {
