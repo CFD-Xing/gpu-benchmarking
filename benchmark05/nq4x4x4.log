@@ -1,0 +1,46 @@
+--------------------------------
+Benchmark05 : BwdTrans (3D)     
+--------------------------------
+BwdTrans (NQ = 4, 4, 4)
+nelmt 128 Case: Kokkos (Uncoales) Kokkos (Coales) Kokkos (QP)   Kokkos (QP/Shared) cuBLAS       Cuda (Uncoales) Cuda (Coales)    Cuda (QP)      Cuda (QP/Shared)  Cuda (QP-1D)   Cuda (QP-1D/Shared)
+nelmt 128 norm: 77.91802979     77.91802979     77.91802979     77.91802979     77.91802979     77.91802979     77.91802216     77.91802979     77.91802979     77.91802979     77.91802979
+nelmt 128 GB/s: 1.102586554     1.267464635     3.209699642     3.238254101     1.884256076     1.334823091     1.664594498     3.961904762     3.902831295     3.81557612     3.936465022
+nelmt 256 Case: Kokkos (Uncoales) Kokkos (Coales) Kokkos (QP)   Kokkos (QP/Shared) cuBLAS       Cuda (Uncoales) Cuda (Coales)    Cuda (QP)      Cuda (QP/Shared)  Cuda (QP-1D)   Cuda (QP-1D/Shared)
+nelmt 256 norm: 110.1927414     110.1927414     110.1927414     110.1927414     110.1927338     110.1927338     110.1927414     110.1927338     110.1927338     110.1927338     110.1927338
+nelmt 256 GB/s: 2.203296054     2.538381912     6.49773377     6.441141909     3.062543136     1.993240642     3.138565173     7.856335891     7.790001672     7.636780856     7.884254167
+nelmt 512 Case: Kokkos (Uncoales) Kokkos (Coales) Kokkos (QP)   Kokkos (QP/Shared) cuBLAS       Cuda (Uncoales) Cuda (Coales)    Cuda (QP)      Cuda (QP/Shared)  Cuda (QP-1D)   Cuda (QP-1D/Shared)
+nelmt 512 norm: 155.8360596     155.8360596     155.8360596     155.8360596     155.8360596     155.8360596     155.8360596     155.8360596     155.8360596     155.8360596     155.8360596
+nelmt 512 GB/s: 4.370116775     5.075795953     12.59158165     12.45275959     4.581317601     3.819799139     6.350495792     15.61394102     15.38070479     15.95070181     16.30373546
+nelmt 1024 Case: Kokkos (Uncoales) Kokkos (Coales) Kokkos (QP)   Kokkos (QP/Shared) cuBLAS       Cuda (Uncoales) Cuda (Coales)    Cuda (QP)      Cuda (QP/Shared)  Cuda (QP-1D)   Cuda (QP-1D/Shared)
+nelmt 1024 norm: 220.3854828     220.3854828     220.3854828     220.3854828     220.3854675     220.3854675     220.3854523     220.3854675     220.3854675     220.3854675     220.3854675
+nelmt 1024 GB/s: 8.822571483     10.11412911     23.06249227     22.52317361     6.067753016     7.49248211     12.48738651     30.937583     30.1566343     29.59161639     29.84036506
+nelmt 2048 Case: Kokkos (Uncoales) Kokkos (Coales) Kokkos (QP)   Kokkos (QP/Shared) cuBLAS       Cuda (Uncoales) Cuda (Coales)    Cuda (QP)      Cuda (QP/Shared)  Cuda (QP-1D)   Cuda (QP-1D/Shared)
+nelmt 2048 norm: 311.6721191     311.6721191     311.6721191     311.6721191     311.6721191     311.6721191     311.6721191     311.6721191     311.6721191     311.6721191     311.6721191
+nelmt 2048 GB/s: 17.5810575     20.0137457     41.42201478     39.32644018     7.260784447     14.89454545     24.9246715     58.68010076     58.56945317     55.0977088     57.13742623
+nelmt 4096 Case: Kokkos (Uncoales) Kokkos (Coales) Kokkos (QP)   Kokkos (QP/Shared) cuBLAS       Cuda (Uncoales) Cuda (Coales)    Cuda (QP)      Cuda (QP/Shared)  Cuda (QP-1D)   Cuda (QP-1D/Shared)
+nelmt 4096 norm: 440.7709656     440.7709656     440.7709656     440.7709656     440.7709351     440.7709351     440.7709351     440.7709351     440.7709351     440.7709351     440.7709351
+nelmt 4096 GB/s: 33.74856263     40.31975769     68.64067032     60.83002856     8.026789271     29.80338224     50.69341403     111.8152092     107.6960416     91.35126524     94.10148952
+nelmt 8192 Case: Kokkos (Uncoales) Kokkos (Coales) Kokkos (QP)   Kokkos (QP/Shared) cuBLAS       Cuda (Uncoales) Cuda (Coales)    Cuda (QP)      Cuda (QP/Shared)  Cuda (QP-1D)   Cuda (QP-1D/Shared)
+nelmt 8192 norm: 623.3442383     623.3442383     623.3442383     623.3442383     623.3442383     623.3442383     623.3442383     623.3442383     623.3442383     623.3442383     623.3442383
+nelmt 8192 GB/s: 63.77551544     79.69127158     97.90806409     83.38379799     8.433084272     58.727484     99.89574539     151.7577485     153.1450876     129.3267988     136.1779239
+nelmt 16384 Case: Kokkos (Uncoales) Kokkos (Coales) Kokkos (QP)   Kokkos (QP/Shared) cuBLAS       Cuda (Uncoales) Cuda (Coales)    Cuda (QP)      Cuda (QP/Shared)  Cuda (QP-1D)   Cuda (QP-1D/Shared)
+nelmt 16384 norm: 881.5419312     881.5419312     881.5419312     881.5419312     881.5418701     881.5418701     881.5418091     881.5418701     881.5418701     881.5418701     881.5418701
+nelmt 16384 GB/s: 73.52338684     137.331921     120.9543666     103.8081114     8.653198858     76.51948985     171.3630251     171.3137998     194.9201203     152.518439     174.9831583
+nelmt 32768 Case: Kokkos (Uncoales) Kokkos (Coales) Kokkos (QP)   Kokkos (QP/Shared) cuBLAS       Cuda (Uncoales) Cuda (Coales)    Cuda (QP)      Cuda (QP/Shared)  Cuda (QP-1D)   Cuda (QP-1D/Shared)
+nelmt 32768 norm: 1246.688477     1246.688477     1246.688477     1246.688477     1246.688477     1246.688477     1246.688354     1246.688477     1246.688477     1246.688477     1246.688477
+nelmt 32768 GB/s: 35.40457059     190.0895979     142.243593     117.0343129     8.768298851     40.14686063     225.2734244     207.2410606     218.4893481     181.6950309     197.0453975
+nelmt 65536 Case: Kokkos (Uncoales) Kokkos (Coales) Kokkos (QP)   Kokkos (QP/Shared) cuBLAS       Cuda (Uncoales) Cuda (Coales)    Cuda (QP)      Cuda (QP/Shared)  Cuda (QP-1D)   Cuda (QP-1D/Shared)
+nelmt 65536 norm: 1763.083618     1763.083618     1763.083618     1763.083618     1763.08374     1763.08374     1763.08374     1763.08374     1763.08374     1763.08374     1763.08374
+nelmt 65536 GB/s: 17.38469454     191.3306384     155.9717807     126.5811511     8.8109772     17.38054     203.4654567     229.3274884     246.6638128     198.118929     216.5024323
+nelmt 131072 Case: Kokkos (Uncoales) Kokkos (Coales) Kokkos (QP)   Kokkos (QP/Shared) cuBLAS       Cuda (Uncoales) Cuda (Coales)    Cuda (QP)      Cuda (QP/Shared)  Cuda (QP-1D)   Cuda (QP-1D/Shared)
+nelmt 131072 norm: 2493.376709     2493.376709     2493.376709     2493.376709     2493.376953     2493.376953     2493.376709     2493.376953     2493.376953     2493.376953     2493.376953
+nelmt 131072 GB/s: 14.24714797     170.0244042     163.794439     131.8690105     8.834037652     14.15450925     178.6464269     240.80619     262.942942     208.091628     228.5781743
+nelmt 262144 Case: Kokkos (Uncoales) Kokkos (Coales) Kokkos (QP)   Kokkos (QP/Shared) cuBLAS       Cuda (Uncoales) Cuda (Coales)    Cuda (QP)      Cuda (QP/Shared)  Cuda (QP-1D)   Cuda (QP-1D/Shared)
+nelmt 262144 norm: 3526.168213     3526.168213     3526.168213     3526.168213     3526.16748     3526.167236     3526.16748     3526.167236     3526.167236     3526.167236     3526.167236
+nelmt 262144 GB/s: 13.54164307     179.282153     168.1597775     134.5091902     8.85241378     13.66695374     182.3289856     248.4835486     270.8145289     213.4197924     234.3399511
+nelmt 524288 Case: Kokkos (Uncoales) Kokkos (Coales) Kokkos (QP)   Kokkos (QP/Shared) cuBLAS       Cuda (Uncoales) Cuda (Coales)    Cuda (QP)      Cuda (QP/Shared)  Cuda (QP-1D)   Cuda (QP-1D/Shared)
+nelmt 524288 norm: 4986.755859     4986.755859     4986.755859     4986.755859     4986.753906     4986.753418     4986.753418     4986.753418     4986.753418     4986.753418     4986.753418
+nelmt 524288 GB/s: 13.12899901     182.2878845     170.4176411     135.8718407     8.863219578     13.29125467     187.2933094     252.3715363     269.1720527     211.3816306     228.537936
+nelmt 1048576 Case: Kokkos (Uncoales) Kokkos (Coales) Kokkos (QP)   Kokkos (QP/Shared) cuBLAS       Cuda (Uncoales) Cuda (Coales)    Cuda (QP)      Cuda (QP/Shared)  Cuda (QP-1D)   Cuda (QP-1D/Shared)
+nelmt 1048576 norm: 7052.344727     7052.344727     7052.344727     7052.344727     7052.334473     7052.334473     7052.334473     7052.334473     7052.334473     7052.334473     7052.334473
+nelmt 1048576 GB/s: 12.93568008     184.7294283     171.5283674     135.4369102     8.870436462     13.12034062     187.1766617     254.180944     266.9578589     211.1448362     231.5636081
