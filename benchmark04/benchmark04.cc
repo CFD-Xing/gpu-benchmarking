@@ -395,10 +395,10 @@ void run_test(const unsigned int size, const unsigned int _nq0,
     double time_kokkos2 = std::numeric_limits<double>::max();
     double time_kokkos3 = std::numeric_limits<double>::max();
     double time_kokkos4 = std::numeric_limits<double>::max();
-    std::vector<T> result_kokkos1(1);
-    std::vector<T> result_kokkos2(1);
-    std::vector<T> result_kokkos3(1);
-    std::vector<T> result_kokkos4(1);
+    T result_kokkos1;
+    T result_kokkos2;
+    T result_kokkos3;
+    T result_kokkos4;
     {
         Kokkos::View<T *> d_in("d_in", nelmt * nm0 * nm1);
         Kokkos::View<T *> d_in_coa("d_in", nelmt * nm0 * nm1);
@@ -473,7 +473,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             KOKKOS_LAMBDA(unsigned int i, T &val) {
                 val += d_out(i) * d_out(i);
             },
-            result_kokkos1[0]);
+            result_kokkos1);
 
         // Kokkos 2 - Coalesce
         for (unsigned int t = 0u; t < n_tests; ++t)
@@ -516,7 +516,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             KOKKOS_LAMBDA(unsigned int i, T &val) {
                 val += d_out(i) * d_out(i);
             },
-            result_kokkos2[0]);
+            result_kokkos2);
 
         // Kokkos 3 - No shared memory
         for (unsigned int t = 0u; t < n_tests; ++t)
@@ -578,7 +578,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             KOKKOS_LAMBDA(unsigned int i, T &val) {
                 val += d_out(i) * d_out(i);
             },
-            result_kokkos3[0]);
+            result_kokkos3);
 
         // Kokkos 4 - Shared memory
         for (unsigned int t = 0u; t < n_tests; ++t)
@@ -684,12 +684,12 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             KOKKOS_LAMBDA(unsigned int i, T &val) {
                 val += d_out(i) * d_out(i);
             },
-            result_kokkos4[0]);
+            result_kokkos4);
     }
 
     // cuBLAS kernels
     double time_cublas = std::numeric_limits<double>::max();
-    std::vector<T> result_cublas(1);
+    T result_cublas;
     {
         cublasHandle_t handle;
         cublasCreate(&handle);
@@ -763,7 +763,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             time.stop();
             time_cublas = std::min(time_cublas, time.elapsedSeconds());
         }
-        result_cublas[0] = thrust::transform_reduce(
+        result_cublas = thrust::transform_reduce(
             thrust::device, d_out, d_out + nelmt * nq0 * nq1,
             [] __device__(const T &x) { return x * x; }, (T)0.0,
             thrust::plus<T>());
@@ -782,12 +782,12 @@ void run_test(const unsigned int size, const unsigned int _nq0,
     double time_cuda4 = std::numeric_limits<double>::max();
     double time_cuda5 = std::numeric_limits<double>::max();
     double time_cuda6 = std::numeric_limits<double>::max();
-    std::vector<T> result_cuda1(1);
-    std::vector<T> result_cuda2(1);
-    std::vector<T> result_cuda3(1);
-    std::vector<T> result_cuda4(1);
-    std::vector<T> result_cuda5(1);
-    std::vector<T> result_cuda6(1);
+    T result_cuda1;
+    T result_cuda2;
+    T result_cuda3;
+    T result_cuda4;
+    T result_cuda5;
+    T result_cuda6;
     {
         const unsigned int threads = _threads;
         const unsigned int blocks  = nelmt / _elblock;
@@ -854,7 +854,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             time.stop();
             time_cuda1 = std::min(time_cuda1, time.elapsedSeconds());
         }
-        result_cuda1[0] = thrust::transform_reduce(
+        result_cuda1 = thrust::transform_reduce(
             thrust::device, d_out, d_out + nelmt * nq0 * nq1,
             [] __device__(const T &x) { return x * x; }, (T)0.0,
             thrust::plus<T>());
@@ -873,7 +873,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             time.stop();
             time_cuda2 = std::min(time_cuda2, time.elapsedSeconds());
         }
-        result_cuda2[0] = thrust::transform_reduce(
+        result_cuda2 = thrust::transform_reduce(
             thrust::device, d_out, d_out + nelmt * nq0 * nq1,
             [] __device__(const T &x) { return x * x; }, (T)0.0,
             thrust::plus<T>());
@@ -890,7 +890,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             time.stop();
             time_cuda3 = std::min(time_cuda3, time.elapsedSeconds());
         }
-        result_cuda3[0] = thrust::transform_reduce(
+        result_cuda3 = thrust::transform_reduce(
             thrust::device, d_out, d_out + nelmt * nq0 * nq1,
             [] __device__(const T &x) { return x * x; }, (T)0.0,
             thrust::plus<T>());
@@ -909,7 +909,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             time.stop();
             time_cuda4 = std::min(time_cuda4, time.elapsedSeconds());
         }
-        result_cuda4[0] = thrust::transform_reduce(
+        result_cuda4 = thrust::transform_reduce(
             thrust::device, d_out, d_out + nelmt * nq0 * nq1,
             [] __device__(const T &x) { return x * x; }, (T)0.0,
             thrust::plus<T>());
@@ -925,7 +925,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             time.stop();
             time_cuda5 = std::min(time_cuda5, time.elapsedSeconds());
         }
-        result_cuda5[0] = thrust::transform_reduce(
+        result_cuda5 = thrust::transform_reduce(
             thrust::device, d_out, d_out + nelmt * nq0 * nq1,
             [] __device__(const T &x) { return x * x; }, (T)0.0,
             thrust::plus<T>());
@@ -944,7 +944,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             time.stop();
             time_cuda6 = std::min(time_cuda6, time.elapsedSeconds());
         }
-        result_cuda6[0] = thrust::transform_reduce(
+        result_cuda6 = thrust::transform_reduce(
             thrust::device, d_out, d_out + nelmt * nq0 * nq1,
             [] __device__(const T &x) { return x * x; }, (T)0.0,
             thrust::plus<T>());
@@ -968,17 +968,15 @@ void run_test(const unsigned int size, const unsigned int _nq0,
            " Cuda (Coales)    Cuda (QP)      Cuda (QP/Shared)  Cuda (QP-1D)  "
            " Cuda (QP-1D/Shared)"
         << std::endl;
-    std::cout << "nelmt " << nelmt << " norm: " << std::sqrt(result_kokkos1[0])
-              << "     " << std::sqrt(result_kokkos2[0]) << "     "
-              << std::sqrt(result_kokkos3[0]) << "     "
-              << std::sqrt(result_kokkos4[0]) << "     "
-              << std::sqrt(result_cublas[0]) << "     "
-              << std::sqrt(result_cuda1[0]) << "     "
-              << std::sqrt(result_cuda2[0]) << "     "
-              << std::sqrt(result_cuda3[0]) << "     "
-              << std::sqrt(result_cuda4[0]) << "     "
-              << std::sqrt(result_cuda5[0]) << "     "
-              << std::sqrt(result_cuda6[0]) << std::endl;
+    std::cout << "nelmt " << nelmt << " norm: " << std::sqrt(result_kokkos1)
+              << "     " << std::sqrt(result_kokkos2) << "     "
+              << std::sqrt(result_kokkos3) << "     "
+              << std::sqrt(result_kokkos4) << "     "
+              << std::sqrt(result_cublas) << "     " << std::sqrt(result_cuda1)
+              << "     " << std::sqrt(result_cuda2) << "     "
+              << std::sqrt(result_cuda3) << "     " << std::sqrt(result_cuda4)
+              << "     " << std::sqrt(result_cuda5) << "     "
+              << std::sqrt(result_cuda6) << std::endl;
 
     std::cout
         << "nelmt " << nelmt << " GB/s: "

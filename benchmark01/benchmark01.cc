@@ -142,7 +142,7 @@ template <typename T> void run_test(const unsigned int size)
 
     // Kokkos results
     double time_kokkos = std::numeric_limits<double>::max();
-    std::vector<T> result_kokkos(1);
+    T result_kokkos;
     {
         Kokkos::View<T *> data("data", size);
         Kokkos::parallel_for(
@@ -157,7 +157,7 @@ template <typename T> void run_test(const unsigned int size)
                 KOKKOS_LAMBDA(unsigned int i, T &val) {
                     val += data(i) * data(i);
                 },
-                result_kokkos[0]);
+                result_kokkos);
             time.stop();
             const double t_w = time.elapsedSeconds();
             time_kokkos      = std::min(time_kokkos, t_w);
@@ -166,7 +166,7 @@ template <typename T> void run_test(const unsigned int size)
 
     // Thrust kernels
     double time_thrust = std::numeric_limits<double>::max();
-    std::vector<T> result_thrust(1);
+    T result_thrust;
     {
         thrust::device_vector<T> ddata(size);
         thrust::tabulate(ddata.begin(), ddata.end(),
@@ -175,7 +175,7 @@ template <typename T> void run_test(const unsigned int size)
         for (unsigned int t = 0; t < n_tests; ++t)
         {
             time.start();
-            result_thrust[0] = thrust::transform_reduce(
+            result_thrust = thrust::transform_reduce(
                 ddata.begin(), ddata.end(),
                 [] __device__(const T &x) { return x * x; }, (T)0.0,
                 thrust::plus<T>());
@@ -186,7 +186,7 @@ template <typename T> void run_test(const unsigned int size)
 
     // CUDA kernels 1 - No vector loading
     double time_cuda1 = std::numeric_limits<double>::max();
-    std::vector<T> result_cuda1(1);
+    T result_cuda1;
     {
         const unsigned int threads = 256u;
         const unsigned int blocks  = std::min(size / threads, 256u);
@@ -205,7 +205,7 @@ template <typename T> void run_test(const unsigned int size)
             l2norm_vl<T, false>
                 <<<blocks, threads>>>(sums, ddata.data().get(), size);
             reduce_vl<T, false><<<1, blocks>>>(result, sums, blocks);
-            cudaMemcpy(result_cuda1.data(), result, sizeof(T),
+            cudaMemcpy(&result_cuda1, result, sizeof(T),
                        cudaMemcpyDeviceToHost);
             time.stop();
             time_cuda1 = std::min(time_cuda1, time.elapsedSeconds());
@@ -216,7 +216,7 @@ template <typename T> void run_test(const unsigned int size)
 
     // CUDA kernels 2 - Vector loading
     double time_cuda2 = std::numeric_limits<double>::max();
-    std::vector<T> result_cuda2(1);
+    T result_cuda2;
     {
         const unsigned int threads = 256u;
         const unsigned int blocks  = std::min(size / threads, 256u);
@@ -235,7 +235,7 @@ template <typename T> void run_test(const unsigned int size)
             l2norm_vl<T, true>
                 <<<blocks, threads>>>(sums, ddata.data().get(), size);
             reduce_vl<T, true><<<1, blocks>>>(result, sums, blocks);
-            cudaMemcpy(result_cuda2.data(), result, sizeof(T),
+            cudaMemcpy(&result_cuda2, result, sizeof(T),
                        cudaMemcpyDeviceToHost);
             time.stop();
             time_cuda2 = std::min(time_cuda2, time.elapsedSeconds());
@@ -249,10 +249,10 @@ template <typename T> void run_test(const unsigned int size)
     std::cout << "Size " << size
               << "           Kokkos      Thrust      Cuda        Cuda (vl)"
               << std::endl;
-    std::cout << "Size " << size << " norm: " << std::sqrt(result_kokkos[0])
-              << " " << std::sqrt(result_thrust[0]) << " "
-              << " " << std::sqrt(result_cuda1[0]) << " "
-              << std::sqrt(result_cuda2[0]) << std::endl;
+    std::cout << "Size " << size << " norm: " << std::sqrt(result_kokkos) << " "
+              << std::sqrt(result_thrust) << " "
+              << " " << std::sqrt(result_cuda1) << " "
+              << std::sqrt(result_cuda2) << std::endl;
 
     std::cout << "Size " << size
               << " GB/s: " << sizeof(T) * 1e-9 * size / time_kokkos << " "

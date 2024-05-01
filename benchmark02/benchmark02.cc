@@ -64,7 +64,7 @@ template <typename T> void run_test(const unsigned int size)
 
     // Kokkos results
     double time_kokkos = std::numeric_limits<double>::max();
-    std::vector<T> result_kokkos(1);
+    T result_kokkos;
     {
         Kokkos::View<T *> data1("data1", size);
         Kokkos::View<T *> data2("data2", size);
@@ -88,12 +88,12 @@ template <typename T> void run_test(const unsigned int size)
             KOKKOS_LAMBDA(unsigned int i, T &val) {
                 val += data1(i) * data1(i);
             },
-            result_kokkos[0]);
+            result_kokkos);
     }
 
     // Thrust kernels
     double time_thrust = std::numeric_limits<double>::max();
-    std::vector<T> result_thrust(1);
+    T result_thrust;
     {
         thrust::device_vector<T> ddata1(size);
         thrust::device_vector<T> ddata2(size);
@@ -112,7 +112,7 @@ template <typename T> void run_test(const unsigned int size)
             time.stop();
             time_thrust = std::min(time_thrust, time.elapsedSeconds());
         }
-        result_thrust[0] = thrust::transform_reduce(
+        result_thrust = thrust::transform_reduce(
             ddata1.begin(), ddata1.end(),
             [] __device__(const T &x) { return x * x; }, (T)0.0,
             thrust::plus<T>());
@@ -120,7 +120,7 @@ template <typename T> void run_test(const unsigned int size)
 
     // CUDA kernels 1 - No vector loading
     double time_cuda1 = std::numeric_limits<double>::max();
-    std::vector<T> result_cuda1(1);
+    T result_cuda1;
     {
         const int threads = 1024;
         const int blocks  = ((size / 8 + threads - 1) / threads);
@@ -146,7 +146,7 @@ template <typename T> void run_test(const unsigned int size)
             time.stop();
             time_cuda1 = std::min(time_cuda1, time.elapsedSeconds());
         }
-        result_cuda1[0] = thrust::transform_reduce(
+        result_cuda1 = thrust::transform_reduce(
             thrust::device, cuda_vector1, cuda_vector1 + size,
             [] __device__(const T &x) { return x * x; }, (T)0.0,
             thrust::plus<T>());
@@ -156,7 +156,7 @@ template <typename T> void run_test(const unsigned int size)
 
     // CUDA kernels 2 - Vector loading
     double time_cuda2 = std::numeric_limits<double>::max();
-    std::vector<T> result_cuda2(1);
+    T result_cuda2;
     {
         const int threads = 1024;
         const int blocks  = ((size / 8 + threads - 1) / threads);
@@ -182,7 +182,7 @@ template <typename T> void run_test(const unsigned int size)
             time.stop();
             time_cuda2 = std::min(time_cuda2, time.elapsedSeconds());
         }
-        result_cuda2[0] = thrust::transform_reduce(
+        result_cuda2 = thrust::transform_reduce(
             thrust::device, cuda_vector1, cuda_vector1 + size,
             [] __device__(const T &x) { return x * x; }, (T)0.0,
             thrust::plus<T>());
@@ -195,10 +195,10 @@ template <typename T> void run_test(const unsigned int size)
     std::cout << "Size " << size
               << "           Kokkos      Thrust      Cuda        Cuda (vl)"
               << std::endl;
-    std::cout << "Size " << size << " norm: " << std::sqrt(result_kokkos[0])
-              << " " << std::sqrt(result_thrust[0]) << " "
-              << " " << std::sqrt(result_cuda1[0]) << " "
-              << std::sqrt(result_cuda2[0]) << std::endl;
+    std::cout << "Size " << size << " norm: " << std::sqrt(result_kokkos) << " "
+              << std::sqrt(result_thrust) << " "
+              << " " << std::sqrt(result_cuda1) << " "
+              << std::sqrt(result_cuda2) << std::endl;
 
     std::cout << "Size " << size
               << " GB/s: " << sizeof(T) * 3e-9 * size / time_kokkos << " "

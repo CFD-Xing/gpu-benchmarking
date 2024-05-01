@@ -113,7 +113,7 @@ template <typename T> void run_test(const unsigned int size)
     // Kokkos results
     typedef Kokkos::TeamPolicy<>::member_type team_handle;
     double time_kokkos = std::numeric_limits<double>::max();
-    std::vector<T> result_kokkos(1);
+    T result_kokkos;
     {
         Kokkos::View<T *> d_A("d_A", M * N);
         Kokkos::View<T *> d_x("d_x", N);
@@ -150,12 +150,12 @@ template <typename T> void run_test(const unsigned int size)
         Kokkos::parallel_reduce(
             M,
             KOKKOS_LAMBDA(unsigned int i, T &val) { val += d_y(i) * d_y(i); },
-            result_kokkos[0]);
+            result_kokkos);
     }
 
     // cuBLAS kernels 1 - row major
     double time_cublas1 = std::numeric_limits<double>::max();
-    std::vector<T> result_cublas1(1);
+    T result_cublas1;
     {
         std::vector<T> h_A(M * N), h_x(N);
         for (unsigned int j = 0; j < N; j++)
@@ -188,7 +188,7 @@ template <typename T> void run_test(const unsigned int size)
             time.stop();
             time_cublas1 = std::min(time_cublas1, time.elapsedSeconds());
         }
-        result_cublas1[0] = thrust::transform_reduce(
+        result_cublas1 = thrust::transform_reduce(
             thrust::device, d_y, d_y + M,
             [] __device__(const T &x) { return x * x; }, (T)0.0,
             thrust::plus<T>());
@@ -199,7 +199,7 @@ template <typename T> void run_test(const unsigned int size)
 
     // cuBLAS kernels 2 - column major
     double time_cublas2 = std::numeric_limits<double>::max();
-    std::vector<T> result_cublas2(1);
+    T result_cublas2;
     {
         std::vector<T> h_A(M * N), h_x(N);
         for (unsigned int j = 0; j < N; j++)
@@ -232,7 +232,7 @@ template <typename T> void run_test(const unsigned int size)
             time.stop();
             time_cublas2 = std::min(time_cublas2, time.elapsedSeconds());
         }
-        result_cublas2[0] = thrust::transform_reduce(
+        result_cublas2 = thrust::transform_reduce(
             thrust::device, d_y, d_y + M,
             [] __device__(const T &x) { return x * x; }, (T)0.0,
             thrust::plus<T>());
@@ -243,7 +243,7 @@ template <typename T> void run_test(const unsigned int size)
 
     // CUDA 1 kernels - No vector loading
     double time_cuda1 = std::numeric_limits<double>::max();
-    std::vector<T> result_cuda1(1);
+    T result_cuda1;
     {
         const int threads = 256;
         const int blocks  = 256;
@@ -270,7 +270,7 @@ template <typename T> void run_test(const unsigned int size)
             time.stop();
             time_cuda1 = std::min(time_cuda1, time.elapsedSeconds());
         }
-        result_cuda1[0] = thrust::transform_reduce(
+        result_cuda1 = thrust::transform_reduce(
             thrust::device, d_y, d_y + M,
             [] __device__(const T &x) { return x * x; }, (T)0.0,
             thrust::plus<T>());
@@ -281,7 +281,7 @@ template <typename T> void run_test(const unsigned int size)
 
     // CUDA 2 kernels - Vector loading
     double time_cuda2 = std::numeric_limits<double>::max();
-    std::vector<T> result_cuda2(1);
+    T result_cuda2;
     {
         const int threads = 256;
         const int blocks  = 256;
@@ -308,7 +308,7 @@ template <typename T> void run_test(const unsigned int size)
             time.stop();
             time_cuda2 = std::min(time_cuda2, time.elapsedSeconds());
         }
-        result_cuda2[0] = thrust::transform_reduce(
+        result_cuda2 = thrust::transform_reduce(
             thrust::device, d_y, d_y + M,
             [] __device__(const T &x) { return x * x; }, (T)0.0,
             thrust::plus<T>());
@@ -323,11 +323,10 @@ template <typename T> void run_test(const unsigned int size)
               << "           Kokkos      cuBLAS (rm)   cuBLAS (cm)     Cuda    "
                  "      Cuda (vl)"
               << std::endl;
-    std::cout << "Size " << size << " norm: " << std::sqrt(result_kokkos[0])
-              << "     " << std::sqrt(result_cublas1[0]) << "     "
-              << std::sqrt(result_cublas2[0]) << "     "
-              << std::sqrt(result_cuda1[0]) << "     "
-              << std::sqrt(result_cuda2[0]) << std::endl;
+    std::cout << "Size " << size << " norm: " << std::sqrt(result_kokkos)
+              << "     " << std::sqrt(result_cublas1) << "     "
+              << std::sqrt(result_cublas2) << "     " << std::sqrt(result_cuda1)
+              << "     " << std::sqrt(result_cuda2) << std::endl;
 
     std::cout << "Size " << size
               << " GB/s: " << sizeof(T) * 1.0e-9 * M * N / time_kokkos
@@ -343,7 +342,7 @@ int main(int argc, char **argv)
     std::cout << "Benchmark03 : Matrix-Vector Mult" << std::endl;
     std::cout << "--------------------------------" << std::endl;
     Kokkos::initialize(argc, argv);
-    for (unsigned int size = 2 << 6; size < 2 << 15; size *= 2)
+    for (unsigned int size = 2 << 6; size < 2 << 14; size *= 2)
     {
         run_test<float>(size);
     }
