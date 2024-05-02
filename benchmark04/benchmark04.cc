@@ -918,7 +918,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransQuadKernel_QP_1D<<<blocks, std::min(nq0 * nq1, threads)>>>(
+            BwdTransQuadKernel_QP_1D<<<blocks, std::min(nq0 * nq1, 1024u)>>>(
                 nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1, d_in,
                 d_wsp1, d_out);
             cudaDeviceSynchronize();
@@ -936,7 +936,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransQuadKernel_QP_1D<<<blocks, std::min(nq0 * nq1, threads),
+            BwdTransQuadKernel_QP_1D<<<blocks, std::min(nq0 * nq1, 1024u),
                                        sizeof(T) * ssize6>>>(
                 nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1, d_in,
                 d_out);
@@ -1008,7 +1008,7 @@ int main(int argc, char **argv)
 {
     unsigned int nq0     = (argc > 1) ? atoi(argv[1]) : 8u;
     unsigned int nq1     = (argc > 2) ? atoi(argv[2]) : 8u;
-    unsigned int threads = (argc > 3) ? atoi(argv[3]) : 128u;
+    unsigned int threads = (argc > 3) ? atoi(argv[3]) : 256u;
     unsigned int elblock = (argc > 4) ? atoi(argv[4]) : 16u;
 
     std::cout << "--------------------------------" << std::endl;
