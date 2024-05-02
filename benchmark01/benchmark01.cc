@@ -247,7 +247,7 @@ template <typename T> void run_test(const unsigned int size)
     // Display results
     std::cout << std::setprecision(10);
     std::cout << "Size " << size
-              << "           Kokkos      Thrust      Cuda        Cuda (vl)"
+              << " Case:     Kokkos      Thrust      Cuda        Cuda (vl)"
               << std::endl;
     std::cout << "Size " << size << " norm: " << std::sqrt(result_kokkos) << " "
               << std::sqrt(result_thrust) << " "

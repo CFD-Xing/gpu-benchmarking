@@ -320,7 +320,7 @@ template <typename T> void run_test(const unsigned int size)
     // Display results
     std::cout << std::setprecision(10);
     std::cout << "Size " << size
-              << "           Kokkos      cuBLAS (rm)   cuBLAS (cm)     Cuda    "
+              << " Case:     Kokkos      cuBLAS (rm)   cuBLAS (cm)     Cuda    "
                  "      Cuda (vl)"
               << std::endl;
     std::cout << "Size " << size << " norm: " << std::sqrt(result_kokkos)
