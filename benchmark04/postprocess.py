@@ -7,18 +7,20 @@ for fname in glob.glob('./*.log'):
     data = []
     title = ""
     for line in lines:
-        if "nelmt" in line and "GB/s" in line: data.append(line)
+        if "nelmt" in line and "DOF/s" in line: data.append(line)
         if "NQ =" in line: title = line
 
     labels = ["Kokkos (Uncoales)", "Kokkos (Coales)", "Kokkos (QP)", "Kokkos (QP/Shared)", "cuBLAS", "Cuda (Uncoales)", "Cuda (Coales)", "Cuda (QP)", "Cuda (QP/Shared)", "Cuda (QP-1D)", "Cuda (QP-1D/Shared)"]
     nelmts = [float(line.split()[1]) for line in data]
-    GBs    = [[float(GB) for GB in line.split()[3:]] for line in data]
-    colors = ["royalblue", "royalblue", "mediumblue", "mediumblue", "goldenrod", "yellowgreen", "yellowgreen", "darkgreen", "darkgreen", "darkgreen", "darkgreen"]
+    DOFs    = [[float(DOF) for DOF in line.split()[3:]] for line in data]
+    colors = ["cornflowerblue", "cornflowerblue", "darkblue", "darkblue", "goldenrod", "greenyellow", "greenyellow", "darkgreen", "darkgreen", "darkgreen", "darkgreen"]
     linestyles = ["-", "--", "-", "--", "-", "-", "--", "-", "--", "-.", ":"]
 
     plt.figure()
-    for i in range(0, len(GBs[0])):
-        plt.semilogx(nelmts, [line[i] for line in GBs], linestyle=linestyles[i], color=colors[i], label=labels[i])
+    for i in range(0, len(DOFs[0])):
+        plt.semilogx(nelmts, [line[i] for line in DOFs], linestyle=linestyles[i], color=colors[i], label=labels[i])
     plt.legend()
+    plt.xlabel('Number of elmt.')
+    plt.ylabel('DOF (1e9/s)')
     plt.title(title)
     plt.savefig(fname.split(".log")[0] + ".png")

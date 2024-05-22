@@ -12,7 +12,7 @@
 #include "../utils/cuda_vectors.h"
 #include "../utils/timer.h"
 
-template <typename T, bool shmem = false, bool coal = false>
+template <typename T, bool shmem = false>
 __global__ void BwdTransQuadKernel(
     const unsigned int nm0, const unsigned int nm1, const unsigned int nmTot,
     const unsigned int nq0, const unsigned int nq1, const unsigned int nelmt,
@@ -53,43 +53,92 @@ __global__ void BwdTransQuadKernel(
             for (unsigned int q = 0u, cnt_qp = 0u; q < nm1; ++q)
             {
                 T tmp = 0.0;
-                if constexpr (coal)
+                for (unsigned int p = 0u; p < nm0; ++p, ++cnt_qp)
                 {
-                    for (unsigned int p = 0u; p < nm0; ++p, ++cnt_qp)
-                    {
-                        tmp += in[nelmt * cnt_qp + e] * s_basis0[p * nq0 + i];
-                    }
-                    wsp[nelmt * q + e] = tmp;
+                    tmp += in[nmTot * e + cnt_qp] * s_basis0[p * nq0 + i];
                 }
-                else
-                {
-                    for (unsigned int p = 0u; p < nm0; ++p, ++cnt_qp)
-                    {
-                        tmp += in[nmTot * e + cnt_qp] * s_basis0[p * nq0 + i];
-                    }
-                    wsp[nm1 * e + q] = tmp;
-                }
+                wsp[nm1 * e + q] = tmp;
             }
 
             for (unsigned int j = 0u; j < nq1; ++j)
             {
                 T tmp = 0.0;
-                if constexpr (coal)
+                for (unsigned int q = 0u; q < nm1; ++q)
                 {
-                    for (unsigned int q = 0u; q < nm1; ++q)
-                    {
-                        tmp += wsp[nelmt * q + e] * s_basis1[q * nq1 + j];
-                    }
-                    out[nelmt * (nq0 * j + i) + e] = tmp;
+                    tmp += wsp[nm1 * e + q] * s_basis1[q * nq1 + j];
                 }
-                else
+                out[nq0 * nq1 * e + nq0 * j + i] = tmp;
+            }
+        }
+
+        e += blockDim.x * gridDim.x;
+    }
+}
+
+template <typename T, bool shmem = false>
+__global__ void BwdTransQuadKernel_Coa(
+    const unsigned int nm0, const unsigned int nm1, const unsigned int nmTot,
+    const unsigned int nq0, const unsigned int nq1, const unsigned int nelmt,
+    T *__restrict__ basis0, T *__restrict__ basis1, const T *__restrict__ in,
+    T *__restrict__ wsp, T *__restrict__ out)
+{
+    constexpr unsigned int warpsize = 32u;
+
+    extern __shared__ T shared[];
+
+    T *s_basis0 = shmem ? shared : basis0;
+    T *s_basis1 = shmem ? s_basis0 + nm0 * nq0 : basis1;
+
+    // Copy to shared memory.
+    if constexpr (shmem)
+    {
+        unsigned int sIndex = threadIdx.x;
+        while (sIndex < nm0 * nq0)
+        {
+            s_basis0[sIndex] = basis0[sIndex];
+            sIndex += blockDim.x;
+        }
+
+        sIndex = threadIdx.x;
+        while (sIndex < nm1 * nq1)
+        {
+            s_basis1[sIndex] = basis1[sIndex];
+            sIndex += blockDim.x;
+        }
+    }
+
+    __syncthreads();
+
+    unsigned int e = blockDim.x * blockIdx.x + threadIdx.x;
+
+    while (e < nelmt)
+    {
+        unsigned int iwarp = e / warpsize;
+        unsigned int ilane = e % warpsize;
+        for (unsigned int i = 0u; i < nq0; ++i)
+        {
+            for (unsigned int q = 0u, cnt_qp = 0u; q < nm1; ++q)
+            {
+                T tmp = 0.0;
+                for (unsigned int p = 0u; p < nm0; ++p, ++cnt_qp)
                 {
-                    for (unsigned int q = 0u; q < nm1; ++q)
-                    {
-                        tmp += wsp[nm1 * e + q] * s_basis1[q * nq1 + j];
-                    }
-                    out[nq0 * nq1 * e + nq0 * j + i] = tmp;
+                    tmp += in[iwarp * warpsize * nmTot + warpsize * cnt_qp +
+                              ilane] *
+                           s_basis0[p * nq0 + i];
                 }
+                wsp[iwarp * warpsize * nm1 + warpsize * q + ilane] = tmp;
+            }
+
+            for (unsigned int j = 0u; j < nq1; ++j)
+            {
+                T tmp = 0.0;
+                for (unsigned int q = 0u; q < nm1; ++q)
+                {
+                    tmp += wsp[iwarp * warpsize * nm1 + warpsize * q + ilane] *
+                           s_basis1[q * nq1 + j];
+                }
+                out[iwarp * warpsize * nq0 * nq1 + warpsize * (nq0 * j + i) +
+                    ilane] = tmp;
             }
         }
 
@@ -113,9 +162,9 @@ __global__ void BwdTransQuadKernel_QP(
         T *outptr      = out + nq0 * nq1 * e;
 
         // direction 0
-        for (unsigned int i = threadIdx.x; i < nq0; i += blockDim.x)
+        for (unsigned int i = threadIdx.y; i < nq0; i += blockDim.y)
         {
-            for (unsigned int q = threadIdx.y; q < nm1; q += blockDim.y)
+            for (unsigned int q = threadIdx.x; q < nm1; q += blockDim.x)
             {
                 unsigned int cnt_iq = nm1 * i + q;
                 unsigned int cnt_qp = nm0 * q;
@@ -132,9 +181,9 @@ __global__ void BwdTransQuadKernel_QP(
         __syncthreads();
 
         // direction 1
-        for (unsigned int j = threadIdx.x; j < nq1; j += blockDim.x)
+        for (unsigned int j = threadIdx.y; j < nq1; j += blockDim.y)
         {
-            for (unsigned int i = threadIdx.y; i < nq0; i += blockDim.y)
+            for (unsigned int i = threadIdx.x; i < nq0; i += blockDim.x)
             {
                 unsigned int cnt_ji = nq0 * j + i;
                 unsigned int cnt_iq = nm1 * i;
@@ -196,11 +245,11 @@ __global__ void BwdTransQuadKernel_QP(
         T *outptr      = out + nq0 * nq1 * e;
 
         // Copy to shared memory.
-        for (unsigned int q = threadIdx.x; q < nm1; q += blockDim.x)
+        for (unsigned int q = threadIdx.y; q < nm1; q += blockDim.y)
         {
             const unsigned int cnt_qp = nm0 * q;
 
-            for (unsigned int p = threadIdx.y; p < nm0; p += blockDim.y)
+            for (unsigned int p = threadIdx.x; p < nm0; p += blockDim.x)
             {
                 s_wsp0[cnt_qp + p] = inptr[cnt_qp + p];
             }
@@ -209,9 +258,9 @@ __global__ void BwdTransQuadKernel_QP(
         __syncthreads();
 
         // direction 0
-        for (unsigned int i = threadIdx.x; i < nq0; i += blockDim.x)
+        for (unsigned int i = threadIdx.y; i < nq0; i += blockDim.y)
         {
-            for (unsigned int q = threadIdx.y; q < nm1; q += blockDim.y)
+            for (unsigned int q = threadIdx.x; q < nm1; q += blockDim.x)
             {
                 const unsigned int cnt_iq = nm1 * i + q;
                 unsigned int cnt_qp       = nm0 * q;
@@ -228,9 +277,9 @@ __global__ void BwdTransQuadKernel_QP(
         __syncthreads();
 
         // direction 1
-        for (unsigned int j = threadIdx.x; j < nq1; j += blockDim.x)
+        for (unsigned int j = threadIdx.y; j < nq1; j += blockDim.y)
         {
-            for (unsigned int i = threadIdx.y; i < nq0; i += blockDim.y)
+            for (unsigned int i = threadIdx.x; i < nq0; i += blockDim.x)
             {
                 const unsigned int cnt_ji = nq0 * j + i;
                 unsigned int cnt_iq       = nm1 * i;
@@ -379,7 +428,7 @@ __global__ void BwdTransQuadKernel_QP_1D(
 template <typename T>
 void run_test(const unsigned int size, const unsigned int _nq0,
               const unsigned int _nq1, const unsigned int _threads,
-              const unsigned int _elblock)
+              const unsigned int _blocks)
 {
     Timer time;
     const unsigned int nelmt   = size;
@@ -409,7 +458,10 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         Kokkos::parallel_for(
             Kokkos::TeamPolicy<>(nelmt, Kokkos::AUTO),
             KOKKOS_LAMBDA(const team_handle &team) {
-                unsigned int e = team.league_rank();
+                unsigned int e                  = team.league_rank();
+                constexpr unsigned int warpsize = 32u;
+                unsigned int iwarp              = e / warpsize;
+                unsigned int ilane              = e % warpsize;
                 Kokkos::parallel_for(
                     Kokkos::TeamThreadMDRange<Kokkos::Rank<2>, team_handle>(
                         team, nm0, nm1),
@@ -417,7 +469,8 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                     {
                         d_in(e * nm0 * nm1 + p * nm1 + q) =
                             sin((T)(p * nm1 + q + 1));
-                        d_in_coa((p * nm1 + q) * nelmt + e) =
+                        d_in_coa(iwarp * nm0 * nm1 * warpsize +
+                                 (p * nm1 + q) * warpsize + ilane) =
                             sin((T)(p * nm1 + q + 1));
                     });
             });
@@ -481,6 +534,9 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             time.start();
             Kokkos::parallel_for(
                 nelmt, KOKKOS_LAMBDA(const unsigned int &e) {
+                    constexpr unsigned int warpsize = 32u;
+                    unsigned int iwarp              = e / warpsize;
+                    unsigned int ilane              = e % warpsize;
                     for (unsigned int i = 0u; i < nq0; ++i)
                     {
                         for (unsigned int q = 0u, cnt_qp = 0u; q < nm1; ++q)
@@ -488,10 +544,12 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                             T tmp = 0.0;
                             for (unsigned int p = 0u; p < nm0; ++p, ++cnt_qp)
                             {
-                                tmp += d_in_coa(nelmt * cnt_qp + e) *
+                                tmp += d_in_coa(iwarp * warpsize * nm0 * nm1 +
+                                                warpsize * cnt_qp + ilane) *
                                        d_basis0(p * nq0 + i);
                             }
-                            d_wsp(nelmt * q + e) = tmp;
+                            d_wsp(iwarp * warpsize * nq1 + warpsize * q +
+                                  ilane) = tmp;
                         }
 
                         for (unsigned int j = 0u; j < nq1; ++j)
@@ -499,10 +557,12 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                             T tmp = 0.0;
                             for (unsigned int q = 0u; q < nm1; ++q)
                             {
-                                tmp += d_wsp(nelmt * q + e) *
+                                tmp += d_wsp(iwarp * warpsize * nq1 +
+                                             warpsize * q + ilane) *
                                        d_basis1(q * nq1 + j);
                             }
-                            d_out(nelmt * (nq0 * j + i) + e) = tmp;
+                            d_out(iwarp * warpsize * nq0 * nq1 +
+                                  warpsize * (nq0 * j + i) + ilane) = tmp;
                         }
                     }
                 });
@@ -790,7 +850,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
     T result_cuda6;
     {
         const unsigned int threads = _threads;
-        const unsigned int blocks  = nelmt / _elblock;
+        const unsigned int blocks  = _blocks;
         std::vector<T> h_in(nelmt * nm0 * nm1);
         std::vector<T> h_in_coa(nelmt * nm0 * nm1);
         std::vector<T> h_out(nelmt * nq0 * nq1);
@@ -798,13 +858,17 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         std::vector<T> h_basis1(nm1 * nq1);
         for (unsigned int e = 0u; e < nelmt; e++)
         {
+            constexpr unsigned int warpsize = 32u;
+            unsigned int iwarp              = e / warpsize;
+            unsigned int ilane              = e % warpsize;
             for (unsigned int p = 0u; p < nm0; p++)
             {
                 for (unsigned int q = 0u; q < nm1; q++)
                 {
                     h_in[e * nm0 * nm1 + p * nm1 + q] =
                         sin((T)(p * nm1 + q + 1));
-                    h_in_coa[(p * nm1 + q) * nelmt + e] =
+                    h_in_coa[nm0 * nm1 * warpsize * iwarp +
+                             (p * nm1 + q) * warpsize + ilane] =
                         sin((T)(p * nm1 + q + 1));
                 }
             }
@@ -845,11 +909,10 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransQuadKernel<T, true, false>
-                <<<(nelmt + threads - 1u) / threads, threads,
-                   sizeof(T) * ssize1>>>(nm0, nm1, nm0 * nm1, nq0, nq1, nelmt,
-                                         d_basis0, d_basis1, d_in, d_wsp0,
-                                         d_out);
+            BwdTransQuadKernel<T, true><<<(nelmt + threads - 1u) / threads,
+                                          threads, sizeof(T) * ssize1>>>(
+                nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1, d_in,
+                d_wsp0, d_out);
             cudaDeviceSynchronize();
             time.stop();
             time_cuda1 = std::min(time_cuda1, time.elapsedSeconds());
@@ -864,11 +927,10 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransQuadKernel<T, true, true>
-                <<<(nelmt + threads - 1u) / threads, threads,
-                   sizeof(T) * ssize2>>>(nm0, nm1, nm0 * nm1, nq0, nq1, nelmt,
-                                         d_basis0, d_basis1, d_in_coa, d_wsp0,
-                                         d_out);
+            BwdTransQuadKernel_Coa<T, true><<<(nelmt + threads - 1u) / threads,
+                                              threads, sizeof(T) * ssize2>>>(
+                nm0, nm1, nm0 * nm1, nq0, nq1, nelmt, d_basis0, d_basis1,
+                d_in_coa, d_wsp0, d_out);
             cudaDeviceSynchronize();
             time.stop();
             time_cuda2 = std::min(time_cuda2, time.elapsedSeconds());
@@ -979,28 +1041,18 @@ void run_test(const unsigned int size, const unsigned int _nq0,
               << std::sqrt(result_cuda6) << std::endl;
 
     std::cout
-        << "nelmt " << nelmt << " GB/s: "
-        << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 + nq0 * nq1) / time_kokkos1
-        << "     "
-        << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 + nq0 * nq1) / time_kokkos2
-        << "     "
-        << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 + nq0 * nq1) / time_kokkos3
-        << "     "
-        << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 + nq0 * nq1) / time_kokkos4
-        << "     "
-        << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 + nq0 * nq1) / time_cublas
-        << "     "
-        << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 + nq0 * nq1) / time_cuda1
-        << "     "
-        << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 + nq0 * nq1) / time_cuda2
-        << "     "
-        << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 + nq0 * nq1) / time_cuda3
-        << "     "
-        << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 + nq0 * nq1) / time_cuda4
-        << "     "
-        << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 + nq0 * nq1) / time_cuda5
-        << "     "
-        << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 + nq0 * nq1) / time_cuda6
+        << "nelmt " << nelmt
+        << " DOF/s: " << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1) / time_kokkos1
+        << "     " << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1) / time_kokkos2
+        << "     " << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1) / time_kokkos3
+        << "     " << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1) / time_kokkos4
+        << "     " << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1) / time_cublas
+        << "     " << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1) / time_cuda1
+        << "     " << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1) / time_cuda2
+        << "     " << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1) / time_cuda3
+        << "     " << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1) / time_cuda4
+        << "     " << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1) / time_cuda5
+        << "     " << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1) / time_cuda6
         << std::endl;
 }
 
@@ -1009,7 +1061,7 @@ int main(int argc, char **argv)
     unsigned int nq0     = (argc > 1) ? atoi(argv[1]) : 8u;
     unsigned int nq1     = (argc > 2) ? atoi(argv[2]) : 8u;
     unsigned int threads = (argc > 3) ? atoi(argv[3]) : 256u;
-    unsigned int elblock = (argc > 4) ? atoi(argv[4]) : 16u;
+    unsigned int blocks  = (argc > 4) ? atoi(argv[4]) : 1024u;
 
     std::cout << "--------------------------------" << std::endl;
     std::cout << "Benchmark04 : BwdTrans (2D)     " << std::endl;
@@ -1018,7 +1070,7 @@ int main(int argc, char **argv)
     Kokkos::initialize(argc, argv);
     for (unsigned int size = 2 << 6; size < 2 << 20; size <<= 1)
     {
-        run_test<float>(size, nq0, nq1, threads, elblock);
+        run_test<float>(size, nq0, nq1, threads, blocks);
     }
     Kokkos::finalize();
 }
