@@ -1054,6 +1054,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         << "     " << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1) / time_cuda5
         << "     " << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1) / time_cuda6
         << std::endl;
+    std::cout << std::flush;
 }
 
 int main(int argc, char **argv)

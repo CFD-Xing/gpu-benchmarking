@@ -12,7 +12,7 @@
 #include "../utils/cuda_vectors.h"
 #include "../utils/timer.h"
 
-template <typename T, bool shmem = false, bool coal = false>
+template <typename T, bool shmem = false>
 __global__ void BwdTransHexKernel(
     const unsigned int nm0, const unsigned int nm1, const unsigned int nm2,
     const unsigned int nmTot, const unsigned int nq0, const unsigned int nq1,
@@ -63,24 +63,11 @@ __global__ void BwdTransHexKernel(
                 for (unsigned int q = 0u; q < nm1; ++q, ++cnt_rq)
                 {
                     T tmp = 0.0;
-                    if constexpr (coal)
+                    for (unsigned int p = 0u; p < nm0; ++p, ++cnt_rqp)
                     {
-                        for (unsigned int p = 0u; p < nm0; ++p, ++cnt_rqp)
-                        {
-                            tmp +=
-                                in[nelmt * cnt_rqp + e] * s_basis0[p * nq0 + i];
-                        }
-                        wsp0[nelmt * cnt_rq + e] = tmp;
+                        tmp += in[nmTot * e + cnt_rqp] * s_basis0[p * nq0 + i];
                     }
-                    else
-                    {
-                        for (unsigned int p = 0u; p < nm0; ++p, ++cnt_rqp)
-                        {
-                            tmp +=
-                                in[nmTot * e + cnt_rqp] * s_basis0[p * nq0 + i];
-                        }
-                        wsp0[nm1 * nm2 * e + cnt_rq] = tmp;
-                    }
+                    wsp0[nm1 * nm2 * e + cnt_rq] = tmp;
                 }
             }
 
@@ -88,49 +75,123 @@ __global__ void BwdTransHexKernel(
             {
                 for (unsigned int r = 0u, cnt_rq = 0u; r < nm2; ++r)
                 {
-                    if constexpr (coal)
+                    T tmp = 0.0;
+                    for (unsigned int q = 0u; q < nm1; ++q, ++cnt_rq)
                     {
-                        T tmp = 0.0;
-                        for (unsigned int q = 0u; q < nm1; ++q, ++cnt_rq)
-                        {
-                            tmp += wsp0[nelmt * cnt_rq + e] *
-                                   s_basis1[q * nq1 + j];
-                        }
-                        wsp1[nelmt * r + e] = tmp;
+                        tmp += wsp0[nm1 * nm2 * e + cnt_rq] *
+                               s_basis1[q * nq1 + j];
                     }
-                    else
-                    {
-                        T tmp = 0.0;
-                        for (unsigned int q = 0u; q < nm1; ++q, ++cnt_rq)
-                        {
-                            tmp += wsp0[nm1 * nm2 * e + cnt_rq] *
-                                   s_basis1[q * nq1 + j];
-                        }
-                        wsp1[nm2 * e + r] = tmp;
-                    }
+                    wsp1[nm2 * e + r] = tmp;
                 }
 
                 for (unsigned int k = 0u; k < nq2; ++k)
                 {
-                    if constexpr (coal)
+                    T tmp = 0.0;
+                    for (unsigned int r = 0u; r < nm2; ++r)
                     {
-                        T tmp = 0.0;
-                        for (unsigned int r = 0u; r < nm2; ++r)
-                        {
-                            tmp += wsp1[nelmt * r + e] * s_basis2[r * nq2 + k];
-                        }
-                        out[nelmt * (k * nq1 * nq0 + j * nq0 + i) + e] = tmp;
+                        tmp += wsp1[nm2 * e + r] * s_basis2[r * nq2 + k];
                     }
-                    else
+                    out[nq0 * nq1 * nq2 * e + k * nq1 * nq0 + j * nq0 + i] =
+                        tmp;
+                }
+            }
+        }
+
+        e += blockDim.x * gridDim.x;
+    }
+}
+
+template <typename T, bool shmem = false>
+__global__ void BwdTransHexKernel_Coa(
+    const unsigned int nm0, const unsigned int nm1, const unsigned int nm2,
+    const unsigned int nmTot, const unsigned int nq0, const unsigned int nq1,
+    const unsigned int nq2, const unsigned int nelmt, T *__restrict__ basis0,
+    T *__restrict__ basis1, T *__restrict__ basis2, const T *__restrict__ in,
+    T *__restrict__ wsp0, T *__restrict__ wsp1, T *__restrict__ out)
+{
+    constexpr unsigned int warpsize = 32u;
+
+    extern __shared__ T shared[];
+    T *s_basis0 = shmem ? shared : basis0;
+    T *s_basis1 = shmem ? s_basis0 + nm0 * nq0 : basis1;
+    T *s_basis2 = shmem ? s_basis1 + nm1 * nq1 : basis2;
+
+    // Copy to shared memory.
+    if constexpr (shmem)
+    {
+        unsigned int sIndex = threadIdx.x;
+        while (sIndex < nm0 * nq0)
+        {
+            s_basis0[sIndex] = basis0[sIndex];
+            sIndex += blockDim.x;
+        }
+
+        sIndex = threadIdx.x;
+        while (sIndex < nm1 * nq1)
+        {
+            s_basis1[sIndex] = basis1[sIndex];
+            sIndex += blockDim.x;
+        }
+
+        sIndex = threadIdx.x;
+        while (sIndex < nm2 * nq2)
+        {
+            s_basis2[sIndex] = basis2[sIndex];
+            sIndex += blockDim.x;
+        }
+    }
+
+    __syncthreads();
+
+    unsigned int e = blockDim.x * blockIdx.x + threadIdx.x;
+
+    while (e < nelmt)
+    {
+        unsigned int iwarp = e / warpsize;
+        unsigned int ilane = e % warpsize;
+        for (unsigned int i = 0u; i < nq0; ++i)
+        {
+            for (unsigned int r = 0u, cnt_rqp = 0u, cnt_rq = 0u; r < nm2; ++r)
+            {
+                for (unsigned int q = 0u; q < nm1; ++q, ++cnt_rq)
+                {
+                    T tmp = 0.0;
+                    for (unsigned int p = 0u; p < nm0; ++p, ++cnt_rqp)
                     {
-                        T tmp = 0.0;
-                        for (unsigned int r = 0u; r < nm2; ++r)
-                        {
-                            tmp += wsp1[nm2 * e + r] * s_basis2[r * nq2 + k];
-                        }
-                        out[nq0 * nq1 * nq2 * e + k * nq1 * nq0 + j * nq0 + i] =
-                            tmp;
+                        tmp += in[iwarp * warpsize * nmTot +
+                                  warpsize * cnt_rqp + ilane] *
+                               s_basis0[p * nq0 + i];
                     }
+                    wsp0[iwarp * warpsize * nm1 * nm2 + warpsize * cnt_rq +
+                         ilane] = tmp;
+                }
+            }
+
+            for (unsigned int j = 0u; j < nq1; ++j)
+            {
+                for (unsigned int r = 0u, cnt_rq = 0u; r < nm2; ++r)
+                {
+                    T tmp = 0.0;
+                    for (unsigned int q = 0u; q < nm1; ++q, ++cnt_rq)
+                    {
+                        tmp += wsp0[iwarp * warpsize * nm1 * nm2 +
+                                    warpsize * cnt_rq + ilane] *
+                               s_basis1[q * nq1 + j];
+                    }
+                    wsp1[iwarp * warpsize * nm2 + warpsize * r + ilane] = tmp;
+                }
+
+                for (unsigned int k = 0u; k < nq2; ++k)
+                {
+                    T tmp = 0.0;
+                    for (unsigned int r = 0u; r < nm2; ++r)
+                    {
+                        tmp += wsp1[iwarp * warpsize * nm2 + warpsize * r +
+                                    ilane] *
+                               s_basis2[r * nq2 + k];
+                    }
+                    out[iwarp * warpsize * nq0 * nq1 +
+                        warpsize * (k * nq1 * nq0 + j * nq0 + i) + ilane] = tmp;
                 }
             }
         }
@@ -558,7 +619,7 @@ __global__ void BwdTransHexKernel_QP_1D(
 template <typename T>
 void run_test(const unsigned int size, const unsigned int _nq0,
               const unsigned int _nq1, const unsigned int _nq2,
-              const unsigned int _threads, const unsigned int _elblock)
+              const unsigned int _threads, const unsigned int _blocks)
 {
     Timer time;
     const unsigned int nelmt   = size;
@@ -592,7 +653,10 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         Kokkos::parallel_for(
             Kokkos::TeamPolicy<>(nelmt, Kokkos::AUTO),
             KOKKOS_LAMBDA(const team_handle &team) {
-                unsigned int e = team.league_rank();
+                unsigned int e                  = team.league_rank();
+                constexpr unsigned int warpsize = 32u;
+                unsigned int iwarp              = e / warpsize;
+                unsigned int ilane              = e % warpsize;
                 Kokkos::parallel_for(
                     Kokkos::TeamThreadMDRange<Kokkos::Rank<3>, team_handle>(
                         team, nm0, nm1, nm2),
@@ -601,7 +665,9 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                     {
                         d_in(e * nm0 * nm1 * nm2 + p * nm1 * nm2 + q * nm2 +
                              r) = sin((T)(p * nm1 * nm2 + q * nm2 + r + 1));
-                        d_in_coa((p * nm1 * nm2 + q * nm2 + r) * nelmt + e) =
+                        d_in_coa(iwarp * nm0 * nm1 * nm2 * warpsize +
+                                 (p * nm1 * nm2 + q * nm2 + r) * warpsize +
+                                 ilane) =
                             sin((T)(p * nm1 * nm2 + q * nm2 + r + 1u));
                     });
             });
@@ -691,6 +757,9 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             time.start();
             Kokkos::parallel_for(
                 "Kokkos 2", nelmt, KOKKOS_LAMBDA(const unsigned int &e) {
+                    constexpr unsigned int warpsize = 32u;
+                    unsigned int iwarp              = e / warpsize;
+                    unsigned int ilane              = e % warpsize;
                     for (unsigned int i = 0u; i < nq0; ++i)
                     {
                         for (unsigned int r = 0u, cnt_rqp = 0u, cnt_rq = 0u;
@@ -702,10 +771,14 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                                 for (unsigned int p = 0u; p < nm0;
                                      ++p, ++cnt_rqp)
                                 {
-                                    tmp += d_in_coa(nelmt * cnt_rqp + e) *
-                                           d_basis0(p * nq0 + i);
+                                    tmp +=
+                                        d_in_coa(iwarp * warpsize * nm0 * nm1 *
+                                                     nm2 +
+                                                 warpsize * cnt_rqp + ilane) *
+                                        d_basis0(p * nq0 + i);
                                 }
-                                d_wsp1(nelmt * cnt_rq + e) = tmp;
+                                d_wsp1(iwarp * warpsize * nm1 * nm2 +
+                                       warpsize * cnt_rq + ilane) = tmp;
                             }
                         }
 
@@ -717,10 +790,12 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                                 for (unsigned int q = 0u; q < nm1;
                                      ++q, ++cnt_rq)
                                 {
-                                    tmp += d_wsp1(nelmt * cnt_rq + e) *
+                                    tmp += d_wsp1(iwarp * warpsize * nm1 * nm2 +
+                                                  warpsize * cnt_rq + ilane) *
                                            d_basis1(q * nq1 + j);
                                 }
-                                d_wsp2(nelmt * r + e) = tmp;
+                                d_wsp2(iwarp * warpsize * nm2 + warpsize * r +
+                                       ilane) = tmp;
                             }
 
                             for (unsigned int k = 0u; k < nq2; ++k)
@@ -728,11 +803,13 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                                 T tmp = 0.0;
                                 for (unsigned int r = 0u; r < nm2; ++r)
                                 {
-                                    tmp += d_wsp2(nelmt * r + e) *
+                                    tmp += d_wsp2(iwarp * warpsize * nm2 +
+                                                  warpsize * r + ilane) *
                                            d_basis2(r * nq2 + k);
                                 }
-                                d_out(nelmt * (k * nq1 * nq0 + j * nq0 + i) +
-                                      e) = tmp;
+                                d_out(iwarp * warpsize * nq0 * nq1 * nq2 +
+                                      warpsize * (k * nq1 * nq0 + j * nq0 + i) +
+                                      ilane) = tmp;
                             }
                         }
                     }
@@ -1108,7 +1185,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
     T result_cuda6;
     {
         const unsigned int threads = _threads;
-        const unsigned int blocks  = nelmt / _elblock;
+        const unsigned int blocks  = _blocks;
         std::vector<T> h_in(nelmt * nm0 * nm1 * nm2);
         std::vector<T> h_in_coa(nelmt * nm0 * nm1 * nm2);
         std::vector<T> h_out(nelmt * nq0 * nq1 * nq2);
@@ -1117,6 +1194,9 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         std::vector<T> h_basis2(nm2 * nq2);
         for (unsigned int e = 0u; e < nelmt; e++)
         {
+            constexpr unsigned int warpsize = 32u;
+            unsigned int iwarp              = e / warpsize;
+            unsigned int ilane              = e % warpsize;
             for (unsigned int p = 0u; p < nm0; p++)
             {
                 for (unsigned int q = 0u; q < nm1; q++)
@@ -1125,7 +1205,9 @@ void run_test(const unsigned int size, const unsigned int _nq0,
                     {
                         h_in[e * nm0 * nm1 * nm2 + p * nm1 * nm2 + q * nm2 +
                              r] = sin((T)(p * nm1 * nm2 + q * nm2 + r + 1u));
-                        h_in_coa[(p * nm1 * nm2 + q * nm2 + r) * nelmt + e] =
+                        h_in_coa[nm0 * nm1 * nm2 * warpsize * iwarp +
+                                 (p * nm1 * nm2 + q * nm2 + r) * warpsize +
+                                 ilane] =
                             sin((T)(p * nm1 * nm2 + q * nm2 + r + 1u));
                     }
                 }
@@ -1180,11 +1262,10 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransHexKernel<T, true, false>
-                <<<(nelmt + threads - 1u) / threads, threads,
-                   sizeof(T) * ssize1>>>(nm0, nm1, nm2, nm0 * nm1 * nm2, nq0,
-                                         nq1, nq2, nelmt, d_basis0, d_basis1,
-                                         d_basis2, d_in, d_wsp0, d_wsp1, d_out);
+            BwdTransHexKernel<T, true><<<(nelmt + threads - 1u) / threads,
+                                         threads, sizeof(T) * ssize1>>>(
+                nm0, nm1, nm2, nm0 * nm1 * nm2, nq0, nq1, nq2, nelmt, d_basis0,
+                d_basis1, d_basis2, d_in, d_wsp0, d_wsp1, d_out);
             cudaDeviceSynchronize();
             time.stop();
             time_cuda1 = std::min(time_cuda1, time.elapsedSeconds());
@@ -1199,8 +1280,8 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransHexKernel<T, true, true><<<(nelmt + threads - 1u) / threads,
-                                               threads, sizeof(T) * ssize2>>>(
+            BwdTransHexKernel_Coa<T, true><<<(nelmt + threads - 1u) / threads,
+                                             threads, sizeof(T) * ssize2>>>(
                 nm0, nm1, nm2, nm0 * nm1 * nm2, nq0, nq1, nq2, nelmt, d_basis0,
                 d_basis1, d_basis2, d_in_coa, d_wsp0, d_wsp1, d_out);
             cudaDeviceSynchronize();
@@ -1322,40 +1403,30 @@ void run_test(const unsigned int size, const unsigned int _nq0,
               << "     " << std::sqrt(result_cuda5) << "     "
               << std::sqrt(result_cuda6) << std::endl;
 
-    std::cout << "nelmt " << nelmt << " GB/s: "
-              << sizeof(T) * 1.0e-9 * nelmt *
-                     (nm0 * nm1 * nm2 + nq0 * nq1 * nq2) / time_kokkos1
+    std::cout << "nelmt " << nelmt << " DOF/s: "
+              << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_kokkos1
               << "     "
-              << sizeof(T) * 1.0e-9 * nelmt *
-                     (nm0 * nm1 * nm2 + nq0 * nq1 * nq2) / time_kokkos2
+              << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_kokkos2
               << "     "
-              << sizeof(T) * 1.0e-9 * nelmt *
-                     (nm0 * nm1 * nm2 + nq0 * nq1 * nq2) / time_kokkos3
+              << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_kokkos3
               << "     "
-              << sizeof(T) * 1.0e-9 * nelmt *
-                     (nm0 * nm1 * nm2 + nq0 * nq1 * nq2) / time_kokkos4
+              << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_kokkos4
               << "     "
-              << sizeof(T) * 1.0e-9 * nelmt *
-                     (nm0 * nm1 * nm2 + nq0 * nq1 * nq2) / time_cublas
+              << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_cublas
               << "     "
-              << sizeof(T) * 1.0e-9 * nelmt *
-                     (nm0 * nm1 * nm2 + nq0 * nq1 * nq2) / time_cuda1
+              << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_cuda1
               << "     "
-              << sizeof(T) * 1.0e-9 * nelmt *
-                     (nm0 * nm1 * nm2 + nq0 * nq1 * nq2) / time_cuda2
+              << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_cuda2
               << "     "
-              << sizeof(T) * 1.0e-9 * nelmt *
-                     (nm0 * nm1 * nm2 + nq0 * nq1 * nq2) / time_cuda3
+              << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_cuda3
               << "     "
-              << sizeof(T) * 1.0e-9 * nelmt *
-                     (nm0 * nm1 * nm2 + nq0 * nq1 * nq2) / time_cuda4
+              << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_cuda4
               << "     "
-              << sizeof(T) * 1.0e-9 * nelmt *
-                     (nm0 * nm1 * nm2 + nq0 * nq1 * nq2) / time_cuda5
+              << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_cuda5
               << "     "
-              << sizeof(T) * 1.0e-9 * nelmt *
-                     (nm0 * nm1 * nm2 + nq0 * nq1 * nq2) / time_cuda6
+              << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_cuda6
               << std::endl;
+    std::cout << std::flush;
 }
 
 int main(int argc, char **argv)
@@ -1364,7 +1435,7 @@ int main(int argc, char **argv)
     unsigned int nq1     = (argc > 2) ? atoi(argv[2]) : 8u;
     unsigned int nq2     = (argc > 3) ? atoi(argv[3]) : 8u;
     unsigned int threads = (argc > 4) ? atoi(argv[4]) : 256u;
-    unsigned int elblock = (argc > 5) ? atoi(argv[5]) : 4u;
+    unsigned int blocks  = (argc > 5) ? atoi(argv[5]) : 1024u;
 
     std::cout << "--------------------------------" << std::endl;
     std::cout << "Benchmark05 : BwdTrans (3D)     " << std::endl;
@@ -1374,7 +1445,7 @@ int main(int argc, char **argv)
     Kokkos::initialize(argc, argv);
     for (unsigned int size = 2 << 6; size < 2 << 20; size <<= 1)
     {
-        run_test<float>(size, nq0, nq1, nq2, threads, elblock);
+        run_test<float>(size, nq0, nq1, nq2, threads, blocks);
     }
     Kokkos::finalize();
 }
