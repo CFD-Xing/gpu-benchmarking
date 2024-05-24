@@ -219,11 +219,11 @@ __global__ void BwdTransHexKernel_QP(
         T *outptr      = out + nq0 * nq1 * nq2 * e;
 
         // direction 0
-        for (unsigned int i = threadIdx.x; i < nq0; i += blockDim.x)
+        for (unsigned int i = threadIdx.z; i < nq0; i += blockDim.z)
         {
             for (unsigned int r = threadIdx.y; r < nm2; r += blockDim.y)
             {
-                for (unsigned int q = threadIdx.z; q < nm1; q += blockDim.z)
+                for (unsigned int q = threadIdx.x; q < nm1; q += blockDim.x)
                 {
                     unsigned int cnt_rqp = nm1 * nm0 * r + nm0 * q;
                     unsigned int cnt_irq = nm1 * nm2 * i + nm1 * r + q;
@@ -241,11 +241,11 @@ __global__ void BwdTransHexKernel_QP(
         __syncthreads();
 
         // direction 1
-        for (unsigned int j = threadIdx.x; j < nq1; j += blockDim.x)
+        for (unsigned int j = threadIdx.z; j < nq1; j += blockDim.z)
         {
             for (unsigned int i = threadIdx.y; i < nq0; i += blockDim.y)
             {
-                for (unsigned int r = threadIdx.z; r < nm2; r += blockDim.z)
+                for (unsigned int r = threadIdx.x; r < nm2; r += blockDim.x)
                 {
                     unsigned int cnt_irq = nm1 * nm2 * i + nm1 * r;
                     unsigned int cnt_jir = nq0 * nm2 * j + nm2 * i + r;
@@ -263,11 +263,11 @@ __global__ void BwdTransHexKernel_QP(
         __syncthreads();
 
         // direction 2
-        for (unsigned int k = threadIdx.x; k < nq2; k += blockDim.x)
+        for (unsigned int k = threadIdx.z; k < nq2; k += blockDim.z)
         {
             for (unsigned int j = threadIdx.y; j < nq1; j += blockDim.y)
             {
-                for (unsigned int i = threadIdx.z; i < nq0; i += blockDim.z)
+                for (unsigned int i = threadIdx.x; i < nq0; i += blockDim.x)
                 {
                     unsigned int cnt_jir = nq0 * nm2 * j + nm2 * i;
                     unsigned int cnt_kji = nq0 * nq1 * k + nq0 * j + i;
@@ -307,31 +307,31 @@ __global__ void BwdTransHexKernel_QP(
     unsigned int e = blockIdx.x;
 
     // Copy to shared memory.
-    for (unsigned int p = threadIdx.x; p < nm0; p += blockDim.x)
+    for (unsigned int p = threadIdx.y; p < nm0; p += blockDim.y)
     {
         unsigned int cnt_pi = nq0 * p;
 
-        for (unsigned int i = threadIdx.y; i < nq0; i += blockDim.y)
+        for (unsigned int i = threadIdx.x; i < nq0; i += blockDim.x)
         {
             s_basis0[cnt_pi + i] = basis0[cnt_pi + i];
         }
     }
 
-    for (unsigned int q = threadIdx.x; q < nm1; q += blockDim.x)
+    for (unsigned int q = threadIdx.y; q < nm1; q += blockDim.y)
     {
         unsigned int cnt_qj = nq1 * q;
 
-        for (unsigned int j = threadIdx.y; j < nq1; j += blockDim.y)
+        for (unsigned int j = threadIdx.x; j < nq1; j += blockDim.x)
         {
             s_basis1[cnt_qj + j] = basis1[cnt_qj + j];
         }
     }
 
-    for (unsigned int r = threadIdx.x; r < nm2; r += blockDim.x)
+    for (unsigned int r = threadIdx.y; r < nm2; r += blockDim.y)
     {
         unsigned int cnt_rk = nq2 * r;
 
-        for (unsigned int k = threadIdx.y; k < nq2; k += blockDim.y)
+        for (unsigned int k = threadIdx.x; k < nq2; k += blockDim.x)
         {
             s_basis2[cnt_rk + k] = basis2[cnt_rk + k];
         }
@@ -343,13 +343,13 @@ __global__ void BwdTransHexKernel_QP(
         T *outptr      = out + nq0 * nq1 * nq2 * e;
 
         // Copy to shared memory.
-        for (unsigned int r = threadIdx.x; r < nm2; r += blockDim.x)
+        for (unsigned int r = threadIdx.z; r < nm2; r += blockDim.z)
         {
             for (unsigned int q = threadIdx.y; q < nm1; q += blockDim.y)
             {
                 unsigned int cnt_rqp = nm1 * nm0 * r + nm0 * q;
 
-                for (unsigned int p = threadIdx.z; p < nm0; p += blockDim.z)
+                for (unsigned int p = threadIdx.x; p < nm0; p += blockDim.x)
                 {
                     s_wsp0[cnt_rqp + p] = inptr[cnt_rqp + p];
                 }
@@ -359,11 +359,11 @@ __global__ void BwdTransHexKernel_QP(
         __syncthreads();
 
         // direction 0
-        for (unsigned int i = threadIdx.x; i < nq0; i += blockDim.x)
+        for (unsigned int i = threadIdx.z; i < nq0; i += blockDim.z)
         {
             for (unsigned int r = threadIdx.y; r < nm2; r += blockDim.y)
             {
-                for (unsigned int q = threadIdx.z; q < nm1; q += blockDim.z)
+                for (unsigned int q = threadIdx.x; q < nm1; q += blockDim.x)
                 {
                     unsigned int cnt_rqp = nm1 * nm0 * r + nm0 * q;
                     unsigned int cnt_irq = nm1 * nm2 * i + nm1 * r + q;
@@ -381,11 +381,11 @@ __global__ void BwdTransHexKernel_QP(
         __syncthreads();
 
         // direction 1
-        for (unsigned int j = threadIdx.x; j < nq1; j += blockDim.x)
+        for (unsigned int j = threadIdx.z; j < nq1; j += blockDim.z)
         {
             for (unsigned int i = threadIdx.y; i < nq0; i += blockDim.y)
             {
-                for (unsigned int r = threadIdx.z; r < nm2; r += blockDim.z)
+                for (unsigned int r = threadIdx.x; r < nm2; r += blockDim.x)
                 {
                     unsigned int cnt_irq = nm1 * nm2 * i + nm1 * r;
                     unsigned int cnt_jir = nq0 * nm2 * j + nm2 * i + r;
@@ -403,11 +403,11 @@ __global__ void BwdTransHexKernel_QP(
         __syncthreads();
 
         // direction 2
-        for (unsigned int k = threadIdx.x; k < nq2; k += blockDim.x)
+        for (unsigned int k = threadIdx.z; k < nq2; k += blockDim.z)
         {
             for (unsigned int j = threadIdx.y; j < nq1; j += blockDim.y)
             {
-                for (unsigned int i = threadIdx.z; i < nq0; i += blockDim.z)
+                for (unsigned int i = threadIdx.x; i < nq0; i += blockDim.x)
                 {
                     unsigned int cnt_jir = nq0 * nm2 * j + nm2 * i;
                     unsigned int cnt_kji = nq0 * nq1 * k + nq0 * j + i;
@@ -619,7 +619,7 @@ __global__ void BwdTransHexKernel_QP_1D(
 template <typename T>
 void run_test(const unsigned int size, const unsigned int _nq0,
               const unsigned int _nq1, const unsigned int _nq2,
-              const unsigned int _threads, const unsigned int _blocks)
+              const unsigned int _threads, const unsigned int _elblocks)
 {
     Timer time;
     const unsigned int nelmt   = size;
@@ -1185,7 +1185,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
     T result_cuda6;
     {
         const unsigned int threads = _threads;
-        const unsigned int blocks  = _blocks;
+        const unsigned int blocks  = nelmt / _elblocks; // QP only
         std::vector<T> h_in(nelmt * nm0 * nm1 * nm2);
         std::vector<T> h_in_coa(nelmt * nm0 * nm1 * nm2);
         std::vector<T> h_out(nelmt * nq0 * nq1 * nq2);
@@ -1299,8 +1299,8 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             time.start();
             BwdTransHexKernel_QP<<<
                 blocks,
-                dim3(std::min(nq0, 32u), std::min(nq1, 32u),
-                     std::min(nq2, std::max(1u, 1024u / (nq0 * nq1))))>>>(
+                dim3(std::min(nq0, 16u), std::min(nq1, 16u),
+                     std::min(nq2, std::max(1u, 254u / (nq0 * nq1))))>>>(
                 nm0, nm1, nm2, nm0 * nm1 * nm2, nq0, nq1, nq2, nelmt, d_basis0,
                 d_basis1, d_basis2, d_in, d_wsp2, d_wsp3, d_out);
             cudaDeviceSynchronize();
@@ -1321,8 +1321,8 @@ void run_test(const unsigned int size, const unsigned int _nq0,
             time.start();
             BwdTransHexKernel_QP<<<
                 blocks,
-                dim3(std::min(nq0, 32u), std::min(nq1, 32u),
-                     std::min(nq2, std::max(1u, 1024u / (nq0 * nq1)))),
+                dim3(std::min(nq0, 16u), std::min(nq1, 16u),
+                     std::min(nq2, std::max(1u, 254u / (nq0 * nq1)))),
                 sizeof(T) * ssize4>>>(nm0, nm1, nm2, nm0 * nm1 * nm2, nq0, nq1,
                                       nq2, nelmt, d_basis0, d_basis1, d_basis2,
                                       d_in, d_out);
@@ -1340,7 +1340,7 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         {
             time.start();
             BwdTransHexKernel_QP_1D<<<blocks,
-                                      std::min(nq0 * nq1 * nq2, 1024u)>>>(
+                                      std::min(nq0 * nq1 * nq2, threads)>>>(
                 nm0, nm1, nm2, nm0 * nm1 * nm2, nq0, nq1, nq2, nelmt, d_basis0,
                 d_basis1, d_basis2, d_in, d_wsp2, d_wsp3, d_out);
             cudaDeviceSynchronize();
@@ -1359,7 +1359,8 @@ void run_test(const unsigned int size, const unsigned int _nq0,
         for (unsigned int t = 0u; t < n_tests; ++t)
         {
             time.start();
-            BwdTransHexKernel_QP_1D<<<blocks, std::min(nq0 * nq1 * nq2, 1024u),
+            BwdTransHexKernel_QP_1D<<<blocks,
+                                      std::min(nq0 * nq1 * nq2, threads),
                                       sizeof(T) * ssize6>>>(
                 nm0, nm1, nm2, nm0 * nm1 * nm2, nq0, nq1, nq2, nelmt, d_basis0,
                 d_basis1, d_basis2, d_in, d_out);
@@ -1431,11 +1432,11 @@ void run_test(const unsigned int size, const unsigned int _nq0,
 
 int main(int argc, char **argv)
 {
-    unsigned int nq0     = (argc > 1) ? atoi(argv[1]) : 8u;
-    unsigned int nq1     = (argc > 2) ? atoi(argv[2]) : 8u;
-    unsigned int nq2     = (argc > 3) ? atoi(argv[3]) : 8u;
-    unsigned int threads = (argc > 4) ? atoi(argv[4]) : 256u;
-    unsigned int blocks  = (argc > 5) ? atoi(argv[5]) : 1024u;
+    unsigned int nq0      = (argc > 1) ? atoi(argv[1]) : 8u;
+    unsigned int nq1      = (argc > 2) ? atoi(argv[2]) : 8u;
+    unsigned int nq2      = (argc > 3) ? atoi(argv[3]) : 8u;
+    unsigned int threads  = (argc > 4) ? atoi(argv[4]) : 128u;
+    unsigned int elblocks = (argc > 5) ? atoi(argv[5]) : 1u;
 
     std::cout << "--------------------------------" << std::endl;
     std::cout << "Benchmark05 : BwdTrans (3D)     " << std::endl;
@@ -1445,7 +1446,7 @@ int main(int argc, char **argv)
     Kokkos::initialize(argc, argv);
     for (unsigned int size = 2 << 6; size < 2 << 20; size <<= 1)
     {
-        run_test<float>(size, nq0, nq1, nq2, threads, blocks);
+        run_test<float>(size, nq0, nq1, nq2, threads, elblocks);
     }
     Kokkos::finalize();
 }
