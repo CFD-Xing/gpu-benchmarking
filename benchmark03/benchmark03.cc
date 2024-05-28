@@ -246,7 +246,7 @@ template <typename T> void run_test(const unsigned int size)
     T result_cuda1;
     {
         const int threads = 256;
-        const int blocks  = 256;
+        const int blocks  = std::min(M, 65535u);
         std::vector<T> h_A(M * N), h_x(N);
         for (unsigned int j = 0; j < N; j++)
         {
@@ -284,7 +284,7 @@ template <typename T> void run_test(const unsigned int size)
     T result_cuda2;
     {
         const int threads = 256;
-        const int blocks  = 256;
+        const int blocks  = std::min(M, 65535u);
         std::vector<T> h_A(M * N), h_x(N);
         for (unsigned int j = 0; j < N; j++)
         {
@@ -344,7 +344,7 @@ int main(int argc, char **argv)
     Kokkos::initialize(argc, argv);
     for (unsigned int size = 2 << 6; size < 2 << 14; size *= 2)
     {
-        run_test<float>(size);
+        run_test<double>(size);
     }
     Kokkos::finalize();
 }

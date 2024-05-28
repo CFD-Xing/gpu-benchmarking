@@ -20,7 +20,7 @@ for fname in glob.glob('./*.log'):
     for i in range(0, len(DOFs[0])):
         plt.semilogx(nelmts, [line[i] for line in DOFs], linestyle=linestyles[i], color=colors[i], label=labels[i])
     plt.legend()
-    plt.ylim([0, 140])
+    plt.ylim([0, 400])
     plt.xlabel('Number of elmt.')
     plt.ylabel('DOF (1e9/s)')
     plt.title(title)

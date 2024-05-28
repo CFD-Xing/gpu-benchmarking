@@ -1446,7 +1446,7 @@ int main(int argc, char **argv)
     Kokkos::initialize(argc, argv);
     for (unsigned int size = 2 << 6; size < 2 << 20; size <<= 1)
     {
-        run_test<float>(size, nq0, nq1, nq2, threads, elblocks);
+        run_test<double>(size, nq0, nq1, nq2, threads, elblocks);
     }
     Kokkos::finalize();
 }

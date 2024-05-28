@@ -2,7 +2,7 @@
 #  CMake script for the benchmark01 program:
 ##
 
-CMAKE_MINIMUM_REQUIRED(VERSION 3.26)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.16)
 
 PROJECT(Benchmark02)
 ADD_EXECUTABLE(benchmark02 benchmark02.cc)

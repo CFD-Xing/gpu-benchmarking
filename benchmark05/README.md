@@ -11,6 +11,7 @@ Compile the Kokkos library:
     $ cd kokkos
     $ mkdir build && cd build 
     $ cmake .. -DCMAKE_CXX_COMPILER=g++ -DCMAKE_CXX_FLAGS=-fPIC -DCMAKE_INSTALL_PREFIX=~/kokkos-install -DKokkos_ENABLE_CUDA=On -DKokkos_ENABLE_CUDA_LAMBDA=ON -DKokkos_ENABLE_CUDA_CONSTEXPR=ON
+    $ make install
     $ cd ../../
 
 # Step 3
@@ -26,3 +27,4 @@ Compile the benchmakring code:
     $ cd gpu-benchmarking/benchmark05
     $ mkdir build && cd build
     $ cmake ../. -DKokkos_ROOT=~/kokkos-install/
+    $ make

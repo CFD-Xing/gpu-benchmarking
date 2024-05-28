@@ -189,7 +189,7 @@ template <typename T> void run_test(const unsigned int size)
     T result_cuda1;
     {
         const unsigned int threads = 256u;
-        const unsigned int blocks  = std::min(size / threads, 256u);
+        const unsigned int blocks  = std::min((size + threads - 1) / threads, 1024u);
         thrust::device_vector<T> ddata(size);
         thrust::tabulate(ddata.begin(), ddata.end(),
                          [] __device__(unsigned int i)
@@ -219,7 +219,7 @@ template <typename T> void run_test(const unsigned int size)
     T result_cuda2;
     {
         const unsigned int threads = 256u;
-        const unsigned int blocks  = std::min(size / threads, 256u);
+        const unsigned int blocks  = std::min((size + threads - 1) / threads, 1024u);
         thrust::device_vector<T> ddata(size);
         thrust::tabulate(ddata.begin(), ddata.end(),
                          [] __device__(unsigned int i)
@@ -269,7 +269,7 @@ int main(int argc, char **argv)
     Kokkos::initialize(argc, argv);
     for (unsigned int size = 1024; size < 1000000000u; size *= 2)
     {
-        run_test<float>(size);
+        run_test<double>(size);
     }
     Kokkos::finalize();
 }

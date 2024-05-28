@@ -1,7 +1,5 @@
 #!/bin/bash
 
-module load cuda
-
 cd build/
 
 case=(2 4 6 8 10 12 14 16 32)

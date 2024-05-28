@@ -215,7 +215,7 @@ int main(int argc, char **argv)
     Kokkos::initialize(argc, argv);
     for (unsigned int size = 1024; size < 1000000000u; size *= 2)
     {
-        run_test<float>(size);
+        run_test<double>(size);
     }
     Kokkos::finalize();
 }
