@@ -1404,28 +1404,18 @@ void run_test(const unsigned int size, const unsigned int _nq0,
               << "     " << std::sqrt(result_cuda5) << "     "
               << std::sqrt(result_cuda6) << std::endl;
 
-    std::cout << "nelmt " << nelmt << " DOF/s: "
-              << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_kokkos1
-              << "     "
-              << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_kokkos2
-              << "     "
-              << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_kokkos3
-              << "     "
-              << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_kokkos4
-              << "     "
-              << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_cublas
-              << "     "
-              << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_cuda1
-              << "     "
-              << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_cuda2
-              << "     "
-              << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_cuda3
-              << "     "
-              << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_cuda4
-              << "     "
-              << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_cuda5
-              << "     "
-              << sizeof(T) * 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_cuda6
+    std::cout << "nelmt " << nelmt
+              << " DOF/s: " << 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_kokkos1
+              << "     " << 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_kokkos2
+              << "     " << 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_kokkos3
+              << "     " << 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_kokkos4
+              << "     " << 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_cublas
+              << "     " << 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_cuda1
+              << "     " << 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_cuda2
+              << "     " << 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_cuda3
+              << "     " << 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_cuda4
+              << "     " << 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_cuda5
+              << "     " << 1.0e-9 * nelmt * (nm0 * nm1 * nm2) / time_cuda6
               << std::endl;
     std::cout << std::flush;
 }
