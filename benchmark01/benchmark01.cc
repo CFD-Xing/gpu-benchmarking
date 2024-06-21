@@ -76,6 +76,39 @@ __global__ void l2norm_vl(T *__restrict__ sums, T *__restrict__ data,
     }
 }
 
+template <typename T, typename Functor>
+__global__ void reduceSumKernel(const unsigned int begin,
+                                const unsigned int end, T *buffer,
+                                Functor functor)
+{
+    // Implementation based on reduce7 of "Ansorge, R. (2022). Programming in
+    // parallel with CUDA: a practical guide. Cambridge University Press."
+
+    auto grid  = cg::this_grid();
+    auto block = cg::this_thread_block();
+    auto warp  = cg::tiled_partition<32>(block);
+    T v        = 0;
+
+    for (unsigned int tid = begin + grid.thread_rank(); tid < end;
+         tid += grid.size())
+    {
+        functor(tid, v);
+    }
+
+    warp.sync();
+    v += warp.shfl_down(v, 16); // |
+    v += warp.shfl_down(v, 8);  // | warp level
+    v += warp.shfl_down(v, 4);  // | reduce here
+    v += warp.shfl_down(v, 2);  // |
+    v += warp.shfl_down(v, 1);  // |
+
+    // use atomicAdd to sum over warps
+    if (warp.thread_rank() == 0)
+    {
+        atomicAdd(&buffer[block.group_index().x], v);
+    }
+}
+
 template <typename T, bool vl = false>
 __global__ void reduce_vl(T *__restrict__ sums, T *__restrict__ data,
                           unsigned int n)
@@ -135,6 +168,18 @@ __global__ void reduce_vl(T *__restrict__ sums, T *__restrict__ data,
     }
 }
 
+template <typename T, bool vl = false>
+__global__ void set_data(T *__restrict__ data, unsigned int n)
+{
+
+    unsigned int i = blockDim.x * blockIdx.x + threadIdx.x;
+    while (i < n)
+    {
+        data[i] = i % 13 + (0.2 + 0.00001 * (i % 100191));
+        i += blockDim.x * gridDim.x;
+    }
+}
+
 template <typename T> void run_test(const unsigned int size)
 {
     Timer time;
@@ -176,9 +221,8 @@ template <typename T> void run_test(const unsigned int size)
         {
             time.start();
             result_thrust = thrust::transform_reduce(
-                ddata.begin(), ddata.end(),
-                [] __device__(const T &x) { return x * x; }, (T)0.0,
-                thrust::plus<T>());
+                ddata.begin(), ddata.end(), [] __device__(const T &x)
+                { return x * x; }, (T)0.0, thrust::plus<T>());
             time.stop();
             time_thrust = std::min(time_thrust, time.elapsedSeconds());
         }
@@ -188,77 +232,106 @@ template <typename T> void run_test(const unsigned int size)
     double time_cuda1 = std::numeric_limits<double>::max();
     T result_cuda1;
     {
+        T *ddata, *sums, *result;
         const unsigned int threads = 256u;
-        const unsigned int blocks  = std::min((size + threads - 1) / threads, 1024u);
-        thrust::device_vector<T> ddata(size);
-        thrust::tabulate(ddata.begin(), ddata.end(),
-                         [] __device__(unsigned int i)
-                         { return i % 13 + (0.2 + 0.00001 * (i % 100191)); });
+        const unsigned int blocks =
+            std::min((size + threads - 1) / threads, 1024u);
+        cudaMalloc(&ddata, size * sizeof(T));
+        set_data<<<blocks, threads>>>(ddata, size);
+	cudaMalloc(&sums, blocks * sizeof(T));
+	cudaMalloc(&result, sizeof(T));
         for (unsigned int t = 0; t < n_tests; ++t)
         {
             time.start();
-            T *sums, *result;
-            cudaMalloc(&sums, blocks * sizeof(T));
-            cudaMalloc(&result, sizeof(T));
             cudaMemset(sums, 0, blocks * sizeof(T));
             cudaMemset(result, 0, sizeof(T));
-            l2norm_vl<T, false>
-                <<<blocks, threads>>>(sums, ddata.data().get(), size);
+            l2norm_vl<T, false><<<blocks, threads>>>(sums, ddata, size);
             reduce_vl<T, false><<<1, blocks>>>(result, sums, blocks);
             cudaMemcpy(&result_cuda1, result, sizeof(T),
                        cudaMemcpyDeviceToHost);
             time.stop();
             time_cuda1 = std::min(time_cuda1, time.elapsedSeconds());
-            cudaFree(sums);
-            cudaFree(result);
         }
+	cudaFree(sums);
+	cudaFree(result);
     }
 
     // CUDA kernels 2 - Vector loading
     double time_cuda2 = std::numeric_limits<double>::max();
     T result_cuda2;
     {
+        T *ddata, *sums, *result;
         const unsigned int threads = 256u;
-        const unsigned int blocks  = std::min((size + threads - 1) / threads, 1024u);
-        thrust::device_vector<T> ddata(size);
-        thrust::tabulate(ddata.begin(), ddata.end(),
-                         [] __device__(unsigned int i)
-                         { return i % 13 + (0.2 + 0.00001 * (i % 100191)); });
+        const unsigned int blocks =
+            std::min((size + threads - 1) / threads, 1024u);
+        cudaMalloc(&ddata, size * sizeof(T));
+        set_data<<<blocks, threads>>>(ddata, size);
+	cudaMalloc(&sums, blocks * sizeof(T));
+	cudaMalloc(&result, sizeof(T));
         for (unsigned int t = 0; t < n_tests; ++t)
         {
             time.start();
-            T *sums, *result;
-            cudaMalloc(&sums, blocks * sizeof(T));
-            cudaMalloc(&result, sizeof(T));
             cudaMemset(sums, 0, blocks * sizeof(T));
             cudaMemset(result, 0, sizeof(T));
-            l2norm_vl<T, true>
-                <<<blocks, threads>>>(sums, ddata.data().get(), size);
+            l2norm_vl<T, true><<<blocks, threads>>>(sums, ddata, size);
             reduce_vl<T, true><<<1, blocks>>>(result, sums, blocks);
             cudaMemcpy(&result_cuda2, result, sizeof(T),
                        cudaMemcpyDeviceToHost);
             time.stop();
             time_cuda2 = std::min(time_cuda2, time.elapsedSeconds());
-            cudaFree(sums);
-            cudaFree(result);
         }
+	cudaFree(sums);
+	cudaFree(result);
+    }
+
+    // CUDA kernels 3 - functor
+    double time_cuda3 = std::numeric_limits<double>::max();
+    T result_cuda3;
+    {
+        T *ddata, *sums, *result;
+        const unsigned int threads = 256u;
+        const unsigned int blocks =
+            std::min((size + threads - 1) / threads, 1024u);
+        cudaMalloc(&ddata, size * sizeof(T));
+        set_data<<<blocks, threads>>>(ddata, size);
+	cudaMalloc(&sums, blocks * sizeof(T));
+	cudaMalloc(&result, sizeof(T));
+        for (unsigned int t = 0; t < n_tests; ++t)
+        {
+            time.start();
+            cudaMemset(sums, 0, blocks * sizeof(T));
+            cudaMemset(result, 0, sizeof(T));
+            reduceSumKernel<<<blocks, threads>>>(
+                0, size, sums, [=] __device__(const unsigned int i, T &sum)
+                { sum += ddata[i] * ddata[i]; });
+            reduce_vl<T, true><<<1, blocks>>>(result, sums, blocks);
+            cudaMemcpy(&result_cuda3, result, sizeof(T),
+                       cudaMemcpyDeviceToHost);
+            time.stop();
+            time_cuda3 = std::min(time_cuda3, time.elapsedSeconds());
+        }
+	cudaFree(sums);
+	cudaFree(result);
     }
 
     // Display results
     std::cout << std::setprecision(10);
     std::cout << "Size " << size
-              << " Case:     Kokkos      Thrust      Cuda        Cuda (vl)"
+              << " Case:     Kokkos      Thrust      CUDA        CUDA (vl)     "
+                 "   CUDA (functor)"
               << std::endl;
     std::cout << "Size " << size << " norm: " << std::sqrt(result_kokkos) << " "
               << std::sqrt(result_thrust) << " "
               << " " << std::sqrt(result_cuda1) << " "
-              << std::sqrt(result_cuda2) << std::endl;
+              << std::sqrt(result_cuda2) << " " << std::sqrt(result_cuda3)
+              << std::endl;
 
     std::cout << "Size " << size
               << " GB/s: " << sizeof(T) * 1e-9 * size / time_kokkos << " "
               << sizeof(T) * 1e-9 * size / time_thrust << " "
               << sizeof(T) * 1e-9 * size / time_cuda1 << " "
-              << sizeof(T) * 1e-9 * size / time_cuda2 << std::endl;
+              << sizeof(T) * 1e-9 * size / time_cuda2 << " "
+              << sizeof(T) * 1e-9 * size / time_cuda3 << std::endl;
 }
 
 int main(int argc, char **argv)
