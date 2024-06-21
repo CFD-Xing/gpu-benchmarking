@@ -9,11 +9,11 @@ for fname in glob.glob('./*.log'):
     for line in lines:
         if "Size" in line and "GB/s" in line: data.append(line)
 
-    labels = ["Kokkos", "Thrust", "Cuda", "Cuda (vl)"]
+    labels = ["Kokkos", "Thrust", "Cuda", "Cuda (vl)", "Cuda (functor)"]
     nelmts = [float(line.split()[1]) for line in data]
     GBs    = [[float(GB) for GB in line.split()[3:]] for line in data]
-    colors = ["royalblue", "goldenrod", "darkgreen", "darkgreen"]
-    linestyles = ["-",  "-", "-", "--"]
+    colors = ["royalblue", "goldenrod", "darkgreen", "darkgreen", "darkgreen"]
+    linestyles = ["-",  "-", "-", "--", ":"]
 
     plt.figure()
     for i in range(0, len(GBs[0])):
